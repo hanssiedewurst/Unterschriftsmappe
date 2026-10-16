@@ -390,6 +390,15 @@ body.shelf-on .shelf {
 .row-btns { display: flex; gap: 6px; }
 .chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .tbl .ctr { text-align: center; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toolbar .grow { flex: 1; }
+.bulkbar { display: flex; flex-direction: column; gap: 10px; border-color: var(--accent); }
+.bulkrow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.bulkrow .txt { width: auto; }
+.tbl .selc { width: 36px; }
+.tbl .selc input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
+.yeartbl tr[aria-current] td { font-weight: 600; }
+.yeartbl tfoot td { font-weight: 600; }
 .txt.date-in { width: 150px; }
 .chk.existing { margin-top: 10px; font-size: 14px; }
 .chk input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
@@ -606,7 +615,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 18</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 19</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2246,7 +2255,7 @@ body.shelf-on .shelf {
   var SEC_NAME = { monthly: 'Monatlich', onetime: 'Einmalig', service: 'Dienstleistung' };
   var MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   var B = { data: null, dataOk: false, contracts: [], scanning: false, rescan: false, scanned: false, progress: '',
-            view: { kind: 'overview' }, year: null, tab: 'offers', saveT: 0, q: '', open: new Set() };
+            view: { kind: 'overview' }, year: null, filter: 'all', sort: 'new', bulk: false, sel: new Set(), visible: [], yYear: null, tab: 'offers', saveT: 0, q: '', open: new Set() };
   var bizEl = $('#biz'), provBtn = $('#provBtn');
   var EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
 
@@ -2675,6 +2684,7 @@ body.shelf-on .shelf {
     else if (k.m.factor === null || k.m.factor === undefined) out.push('<span class="pill wait">Faktor offen</span>');
     if (k.mode === 'manual') out.push('<span class="pill">manuell</span>');
     if (k.existing && k.mode === 'auto') out.push('<span class="pill">Bestandskunde</span>');
+    if (k.m.legacy && k.m.billed) out.push('<span class="pill">Altbestand</span>');
     if (c.parsed.noText && !c.linked) out.push('<span class="pill warn">Scan</span>');
     else if (c.linked) out.push('<span class="pill">Scan · Original verknüpft</span>');
     if (needsCheck(c) && !(c.parsed.noText && !c.linked)) out.push('<span class="pill warn">prüfen</span>');
@@ -2693,6 +2703,7 @@ body.shelf-on .shelf {
     else if (B.view.kind === 'customer') html = viewCustomer();
     else if (B.view.kind === 'rules') html = viewRules();
     else if (B.view.kind === 'payment') html = viewPayment();
+    else if (B.view.kind === 'year') html = viewYear();
     else html = viewOverview();
     bizEl.innerHTML = html;
     renderLinkList();
@@ -2702,50 +2713,128 @@ body.shelf-on .shelf {
     }
   }
 
+  function yearOf(ms) { return new Date(ms).getFullYear(); }
+  function payMonth(pp) { return String(pp.month || pp.date || '').slice(0, 7); }
+  function monthLabel(ym) { var m = /^(\d{4})-(\d{2})/.exec(ym || ''); return m ? MONTHS[Number(m[2]) - 1] + ' ' + m[1] : (ym || ''); }
+  function curMonth() { return isoToday().slice(0, 7); }
+  function newPay() { var mo = curMonth(); return { amount: null, month: mo, date: mo + '-01', note: '', result: null }; }
   function viewOverview() {
-    var years = Array.from(new Set(B.contracts.map(function (c) { return new Date(c.signed).getFullYear(); }))).sort(function (a, b) { return b - a; });
+    var years = Array.from(new Set(B.contracts.map(function (c) { return yearOf(c.signed); }))).sort(function (a, b) { return b - a; });
     if (!years.length) years = [new Date().getFullYear()];
-    if (!B.year || years.indexOf(B.year) < 0) B.year = years[0];
-    var list = B.contracts.filter(function (c) { return new Date(c.signed).getFullYear() === B.year; })
-      .sort(function (a, b) { return b.signed - a.signed; })
-      .map(function (c) { return { c: c, k: calc(c) }; });
-    var sum = function (arr, f) { return round2(arr.reduce(function (a, x) { return a + (f(x) || 0); }, 0)); };
-    var withF = list.filter(function (x) { return x.k.payout !== null; });
-    var noF = list.filter(function (x) { return x.k.payout === null; });
-    withF = withF.filter(function (x) { return x.k.mode !== 'none'; });
-    var notBilled = list.filter(function (x) { return !x.k.m.billed; });
-    var h = '<div class="biz-top"><div><h1>Provision ' + B.year + '</h1><p class="sub">Gezählt ab Unterschrift. Auszahlung = Provision × Faktor.</p></div>' +
+    if (B.year === null || B.year === undefined || (B.year !== 0 && years.indexOf(B.year) < 0)) B.year = years[0];
+    var all = B.year === 0;
+    var inYear = B.contracts.filter(function (c) { return all || yearOf(c.signed) === B.year; }).map(function (c) { return { c: c, k: calc(c) }; });
+    var f = B.filter || 'all';
+    var list = inYear.filter(function (x) { return f === 'all' || (f === 'open' ? !x.k.m.billed : !!x.k.m.billed); });
+    var srt = B.sort || 'new';
+    list.sort(function (a, b) {
+      if (srt === 'old') return a.c.signed - b.c.signed;
+      if (srt === 'cust') return String(a.c.custLabel || a.c.custName || '').localeCompare(String(b.c.custLabel || b.c.custName || ''), 'de') || b.c.signed - a.c.signed;
+      if (srt === 'prov') return b.k.prov - a.k.prov;
+      return b.c.signed - a.c.signed;
+    });
+    B.visible = list.map(function (x) { return x.c.key; });
+    var sum = function (arr, fn) { return round2(arr.reduce(function (a, x) { return a + (fn(x) || 0); }, 0)); };
+    var withF = inYear.filter(function (x) { return x.k.payout !== null && x.k.mode !== 'none'; });
+    var noF = inYear.filter(function (x) { return x.k.payout === null; });
+    var notBilled = inYear.filter(function (x) { return !x.k.m.billed; });
+    var pays = (B.data.payments || []).filter(function (pp) { return all || payMonth(pp).slice(0, 4) === String(B.year); });
+    var h = '<div class="biz-top"><div><h1>Provision ' + (all ? '– alle Jahre' : B.year) + '</h1><p class="sub">Gezählt ab Unterschrift. Auszahlung = Provision × Faktor.</p></div>' +
       '<div class="biz-actions">' +
-      (years.length > 1 ? '<label class="sr" for="yearSel">Jahr</label><select id="yearSel" class="sel">' + years.map(function (y) { return '<option' + (y === B.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' : '') +
-      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">Als CSV exportieren</button></div></div>';
+      '<label class="sr" for="yearSel">Jahr</label><select id="yearSel" class="sel">' + years.map(function (y) { return '<option value="' + y + '"' + (y === B.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') +
+        (years.length > 1 ? '<option value="0"' + (all ? ' selected' : '') + '>Alle Jahre</option>' : '') + '</select>' +
+      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="yearview">Jahresübersicht</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">CSV</button></div></div>';
     h += '<div class="tiles">' +
-      tile('Provision', eur(sum(list, function (x) { return x.k.prov; })), list.length + (list.length === 1 ? ' Vertrag' : ' Verträge')) +
+      tile('Provision', eur(sum(inYear, function (x) { return x.k.prov; })), inYear.length + (inYear.length === 1 ? ' Vertrag' : ' Verträge')) +
       tile('Auszahlung (Faktor bekannt)', eur(sum(withF, function (x) { return x.k.payout; })), withF.length + ' mit Faktor') +
       tile('Faktor offen', noF.length + (noF.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(noF, function (x) { return x.k.prov; })) + ' Provision', noF.length ? 'wait' : '') +
       tile('Noch nicht abgerechnet', notBilled.length + (notBilled.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(notBilled, function (x) { return x.k.payout !== null ? x.k.payout : x.k.prov; })) + ' offen') +
-      (function () {
-        var pays = (B.data.payments || []).filter(function (pp) { return String(pp.date || '').slice(0, 4) === String(B.year); });
-        return tile('Eingegangen', eur(round2(pays.reduce(function (a, pp) { return a + (pp.amount || 0); }, 0))), pays.length + (pays.length === 1 ? ' Zahlung' : ' Zahlungen'));
-      })() +
+      tile('Eingegangen', eur(round2(pays.reduce(function (a, pp) { return a + (pp.amount || 0); }, 0))), pays.length + (pays.length === 1 ? ' Zahlung' : ' Zahlungen')) +
       '</div>';
-    if (!list.length) return h + '<div class="panel pad-in"><p>In diesem Jahr gibt es noch keine unterschriebenen Verträge.</p></div>';
-    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr>' +
+    h += '<div class="toolbar"><div class="seg" role="group" aria-label="Filter">' +
+      [['all', 'Alle'], ['open', 'Nicht abgerechnet'], ['billed', 'Abgerechnet']].map(function (o) {
+        return '<button type="button" data-act="filter" data-v="' + o[0] + '" aria-pressed="' + (f === o[0]) + '">' + o[1] + '</button>';
+      }).join('') + '</div>' +
+      '<label class="sr" for="sortSel">Sortierung</label><select id="sortSel" class="sel">' +
+      [['new', 'Neueste zuerst'], ['old', 'Älteste zuerst'], ['cust', 'Kunde A–Z'], ['prov', 'Provision absteigend']].map(function (o) {
+        return '<option value="' + o[0] + '"' + (srt === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join('') + '</select>' +
+      '<span class="grow"></span><button type="button" class="btn small' + (B.bulk ? ' primary' : '') + '" data-act="bulk">' + (B.bulk ? 'Fertig' : 'Mehrere abhaken') + '</button></div>';
+    if (B.bulk) {
+      h += '<div class="panel pad-in bulkbar"><div class="bulkrow"><strong id="selCount">' + B.sel.size + ' ausgewählt</strong>' +
+        '<button type="button" class="linkish" data-act="selall">alle ' + list.length + ' angezeigten auswählen</button><button type="button" class="linkish" data-act="selnone">Auswahl aufheben</button></div>' +
+        '<div class="bulkrow"><span class="muted">Ausgewählte:</span>' +
+        '<button type="button" class="btn small" data-act="bulkset" data-f="billed" data-v="1">als abgerechnet</button>' +
+        '<button type="button" class="btn small" data-act="bulkset" data-f="installed" data-v="1">als installiert</button>' +
+        '<button type="button" class="btn small" data-act="bulkset" data-f="billed" data-v="0">Abgerechnet entfernen</button></div>' +
+        '<div class="bulkrow"><span class="muted">Altbestand:</span><label for="bulkUntil">alles unterschrieben bis</label><input id="bulkUntil" class="txt" type="date" value="' + esc(B.bulkUntil || '') + '">' +
+        '<button type="button" class="btn small" data-act="bulkuntil">als abgerechnet abhaken</button></div></div>';
+    }
+    if (!list.length) return h + '<div class="panel pad-in"><p>' + (inYear.length ? 'Keine Verträge für diesen Filter.' : 'In diesem Jahr gibt es noch keine unterschriebenen Verträge.') + '</p></div>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr>' + (B.bulk ? '<th class="selc"><span class="sr">Auswahl</span></th>' : '') +
       '<th>Datum</th><th>Kunde</th><th>Angebot</th><th class="num">Provision</th><th class="num">Faktor</th><th class="num">Auszahlung</th><th>Installiert</th><th>Abgerechnet</th>' +
       '</tr></thead><tbody>';
-    var groups = [];
-    list.forEach(function (x) {
-      var d = new Date(x.c.signed), key = d.getFullYear() * 12 + d.getMonth();
-      var g = groups[groups.length - 1];
-      if (!g || g.key !== key) { g = { key: key, label: MONTHS[d.getMonth()] + ' ' + d.getFullYear(), rows: [] }; groups.push(g); }
-      g.rows.push(x);
-    });
-    groups.forEach(function (g) {
-      var p = sum(g.rows, function (x) { return x.k.prov; }), a = sum(g.rows, function (x) { return x.k.payout; });
-      var open = g.rows.filter(function (x) { return x.k.payout === null; }).length;
-      h += '<tr class="month"><td colspan="3">' + esc(g.label) + '</td><td class="num">' + eur(p) + '</td><td></td><td class="num">' + eur(a) + (open ? ' <span class="muted">+ ' + open + ' offen</span>' : '') + '</td><td colspan="2"></td></tr>';
-      g.rows.forEach(function (x) { h += contractRow(x.c, x.k); });
-    });
+    if (srt === 'new' || srt === 'old') {
+      var groups = [];
+      list.forEach(function (x) {
+        var d = new Date(x.c.signed), key = d.getFullYear() * 12 + d.getMonth();
+        var g = groups[groups.length - 1];
+        if (!g || g.key !== key) { g = { key: key, label: MONTHS[d.getMonth()] + ' ' + d.getFullYear(), rows: [] }; groups.push(g); }
+        g.rows.push(x);
+      });
+      groups.forEach(function (g) {
+        var p = sum(g.rows, function (x) { return x.k.prov; }), a = sum(g.rows, function (x) { return x.k.payout; });
+        var open = g.rows.filter(function (x) { return x.k.payout === null; }).length;
+        h += '<tr class="month"><td colspan="' + (B.bulk ? 4 : 3) + '">' + esc(g.label) + '</td><td class="num">' + eur(p) + '</td><td></td><td class="num">' + eur(a) + (open ? ' <span class="muted">+ ' + open + ' offen</span>' : '') + '</td><td colspan="2"></td></tr>';
+        g.rows.forEach(function (x) { h += contractRow(x.c, x.k); });
+      });
+    } else list.forEach(function (x) { h += contractRow(x.c, x.k); });
     return h + '</tbody></table></div></div>';
+  }
+  function viewYear() {
+    var cy = new Date().getFullYear();
+    var ys = new Set([cy]);
+    B.contracts.forEach(function (c) { ys.add(yearOf(c.signed)); });
+    (B.data.payments || []).forEach(function (pp) { var y = Number(payMonth(pp).slice(0, 4)); if (y) ys.add(y); });
+    var years = Array.from(ys).sort(function (a, b) { return b - a; });
+    if (!B.yYear || years.indexOf(B.yYear) < 0) B.yYear = cy;
+    var Y = B.yYear, rows = [];
+    for (var i = 0; i < 12; i++) rows.push({ n: 0, prov: 0, payout: 0, noF: 0, paid: 0, pc: 0 });
+    B.contracts.forEach(function (c) {
+      if (yearOf(c.signed) !== Y) return;
+      var k = calc(c), r = rows[new Date(c.signed).getMonth()];
+      r.n++; r.prov += k.prov;
+      if (k.payout !== null) r.payout += k.payout; else if (k.mode !== 'none') r.noF++;
+    });
+    (B.data.payments || []).forEach(function (pp) {
+      var ym = payMonth(pp); if (ym.slice(0, 4) !== String(Y)) return;
+      var r = rows[Number(ym.slice(5, 7)) - 1]; if (!r) return;
+      r.paid += pp.amount || 0; r.pc++;
+    });
+    var tot = rows.reduce(function (a, r) { a.n += r.n; a.prov += r.prov; a.payout += r.payout; a.noF += r.noF; a.paid += r.paid; a.pc += r.pc; return a; }, { n: 0, prov: 0, payout: 0, noF: 0, paid: 0, pc: 0 });
+    var openAll = B.contracts.map(function (c) { return calc(c); }).filter(function (k) { return !k.m.billed && k.mode !== 'none'; });
+    var openSum = round2(openAll.reduce(function (a, k) { return a + (k.payout !== null ? k.payout : k.prov); }, 0));
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Jahresübersicht' }]);
+    h += '<div class="biz-top"><div><h1>Jahresübersicht ' + Y + '</h1><p class="sub">Verkauft zählt nach Unterschriftsdatum, Eingegangen nach dem Abrechnungsmonat der Zahlung.</p></div>' +
+      '<div class="biz-actions"><label class="sr" for="yYearSel">Jahr</label><select id="yYearSel" class="sel">' + years.map(function (y) { return '<option' + (y === Y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
+      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button></div></div>';
+    h += '<div class="tiles">' +
+      tile('Verkauft (Provision)', eur(round2(tot.prov)), tot.n + (tot.n === 1 ? ' Vertrag' : ' Verträge')) +
+      tile('Auszahlung (Faktor bekannt)', eur(round2(tot.payout)), tot.noF ? tot.noF + ' noch ohne Faktor' : 'alle Faktoren eingetragen', tot.noF ? 'wait' : '') +
+      tile('Eingegangen', eur(round2(tot.paid)), tot.pc + (tot.pc === 1 ? ' Zahlung' : ' Zahlungen')) +
+      tile('Noch offen (alle Jahre)', eur(openSum), openAll.length + (openAll.length === 1 ? ' Vertrag nicht abgerechnet' : ' Verträge nicht abgerechnet')) +
+      '</div>';
+    var firstPay = rows.findIndex(function (r) { return r.pc > 0; }); if (firstPay < 0) firstPay = 99;
+    var cm = Y === cy ? new Date().getMonth() : Y < cy ? 11 : -1;
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl yeartbl"><thead><tr><th>Monat</th><th class="num">Verträge</th><th class="num">Provision</th><th class="num">Auszahlung</th><th class="num">Eingegangen</th></tr></thead><tbody>';
+    rows.forEach(function (r, i) {
+      var empty = !r.n && !r.pc;
+      h += '<tr' + (empty ? ' class="dim"' : '') + (i === cm && Y === cy ? ' aria-current="true"' : '') + '><td>' + MONTHS[i] + '</td><td class="num">' + (r.n || '–') + '</td><td class="num">' + (r.n ? eur(round2(r.prov)) : '–') + '</td>' +
+        '<td class="num">' + (r.n ? eur(round2(r.payout)) + (r.noF ? ' <span class="muted">+ ' + r.noF + ' offen</span>' : '') : '–') + '</td>' +
+        '<td class="num">' + (r.pc ? eur(round2(r.paid)) : (i <= cm && i > firstPay ? '<span class="muted">keine Zahlung</span>' : '–')) + '</td></tr>';
+    });
+    h += '</tbody><tfoot><tr><td>Summe ' + Y + '</td><td class="num">' + tot.n + '</td><td class="num">' + eur(round2(tot.prov)) + '</td><td class="num">' + eur(round2(tot.payout)) + '</td><td class="num">' + eur(round2(tot.paid)) + '</td></tr></tfoot></table></div></div>';
+    return h;
   }
   function shortLabel(c) {
     if (c.offerNo) return c.offerNo;
@@ -2763,7 +2852,7 @@ body.shelf-on .shelf {
     return '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="' + f + '"' + (m[f] ? ' checked' : '') + '><span class="sr">' + label + '</span></label>';
   }
   function contractRow(c, k) {
-    return '<tr><td>' + fmtDate(c.signed) + '</td>' +
+    return '<tr>' + (B.bulk ? '<td class="selc"><input type="checkbox" data-sel="' + esc(c.key) + '"' + (B.sel.has(c.key) ? ' checked' : '') + ' aria-label="auswählen"></td>' : '') + '<td>' + fmtDate(c.signed) + '</td>' +
       '<td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(c.custKey) + '">' + esc(c.custLabel || c.custName) + '</button>' + (c.custNo ? '<br><span class="muted small">KD ' + esc(c.custNo) + '</span>' : '') + '</td>' +
       '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> ' + statusPills(c, k) + '</td>' +
       '<td class="num">' + eur(k.prov) + '</td>' +
@@ -2992,9 +3081,15 @@ body.shelf-on .shelf {
     });
     return { results: res.slice(0, 8), more: Math.max(0, res.length - 8), candidates: n, cut: nodes > LIMIT };
   }
+  function readPayForm(amt) {
+    B.pay.amount = round2(amt);
+    B.pay.month = ($('#payMonth') && $('#payMonth').value) || curMonth();
+    B.pay.date = B.pay.month + '-01';
+    B.pay.note = $('#payNote').value.trim();
+  }
   function applyCombo(r) {
     var p = B.pay;
-    var pay = { id: 'P' + Date.now(), date: p.date || isoToday(), amount: p.amount, note: p.note || '', contracts: [], factorsSet: [], installedSet: [] };
+    var pay = { id: 'P' + Date.now(), month: p.month || curMonth(), date: p.date || isoToday(), amount: p.amount, note: p.note || '', contracts: [], factorsSet: [], installedSet: [] };
     var when = new Date((pay.date || isoToday()) + 'T12:00:00').getTime();
     r.items.forEach(function (x) {
       var m = meta(x.c);
@@ -3005,7 +3100,7 @@ body.shelf-on .shelf {
     });
     B.data.payments.push(pay);
     saveData();
-    B.pay = { amount: null, date: isoToday(), note: '', result: null };
+    B.pay = newPay();
     toast('Zahlung über ' + eur(pay.amount) + ' zugeordnet: ' + pay.contracts.length + (pay.contracts.length === 1 ? ' Vertrag' : ' Verträge') + ' abgerechnet.', { ms: 6000 });
   }
   function undoPayment(id) {
@@ -3030,14 +3125,14 @@ body.shelf-on .shelf {
       '<td class="num">' + eur(x.k.prov) + '</td><td class="num">' + (x.known ? deNum(f) : '<span class="pill wait">wäre ' + deNum(f) + '</span>') + '</td><td class="num">' + eur(out) + '</td></tr>';
   }
   function viewPayment() {
-    var p = B.pay || (B.pay = { amount: null, date: isoToday(), note: '', result: null });
+    var p = B.pay || (B.pay = newPay());
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Zahlung eintragen' }]);
-    h += '<div class="biz-top"><div><h1>Gezahlte Provision zuordnen</h1><p class="sub">Trag den erhaltenen Betrag ein. Die App sucht unter allen noch nicht abgerechneten Verträgen eine passende Kombination, auch unter denen, die nicht als installiert markiert sind. Abweichungen bis ' + PAY_TOL + ' € gelten als Rundung.</p></div></div>';
+    h += '<div class="biz-top"><div><h1>Zahlung eintragen</h1><p class="sub">Trag den Betrag aus deiner Monatsabrechnung ein. Mit „Nur eintragen“ landet er direkt in der Jahresübersicht. Mit „Passende Verträge suchen“ sucht die App unter allen noch nicht abgerechneten Verträgen eine passende Kombination, auch unter denen, die nicht als installiert markiert sind. Abweichungen bis ' + PAY_TOL + ' € gelten als Rundung.</p></div></div>';
     h += '<div class="panel pad-in"><div class="payform">' +
       '<label class="fld"><span>Betrag (€)</span><input id="payAmount" class="txt big" type="text" inputmode="decimal" autocomplete="off" placeholder="z. B. 2.694,56" value="' + esc(p.amount === null || p.amount === undefined ? '' : deNum(p.amount.toFixed(2))) + '"></label>' +
-      '<label class="fld"><span>Eingang am</span><input id="payDate" class="txt" type="date" value="' + esc(p.date || isoToday()) + '"></label>' +
+      '<label class="fld"><span>Abrechnungsmonat</span><input id="payMonth" class="txt" type="month" value="' + esc(p.month || curMonth()) + '"></label>' +
       '<label class="fld grow2"><span>Notiz (optional)</span><input id="payNote" class="txt" type="text" autocomplete="off" placeholder="z. B. Gutschrift Oktober" value="' + esc(p.note || '') + '"></label>' +
-      '<button type="button" class="btn primary" data-act="paysearch">Passende Verträge suchen</button></div></div>';
+      '<button type="button" class="btn" data-act="payonly">Nur eintragen</button><button type="button" class="btn primary" data-act="paysearch">Passende Verträge suchen</button></div></div>';
     if (p.result) {
       var r = p.result;
       if (!r.results.length) {
@@ -3057,16 +3152,16 @@ body.shelf-on .shelf {
         h += '<p class="sub"><button type="button" class="linkish" data-act="paysave">Keiner passt: Zahlung ohne Zuordnung speichern</button></p>';
       }
     }
-    var pays = (B.data.payments || []).slice().sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+    var pays = (B.data.payments || []).slice().sort(function (a, b) { return payMonth(b).localeCompare(payMonth(a)) || String(b.id).localeCompare(String(a.id)); });
     h += '<h2 class="h2">Bisherige Zahlungen</h2>';
     if (!pays.length) return h + '<div class="panel pad-in"><p>Noch keine Zahlungen eingetragen.</p></div>';
-    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Eingang</th><th class="num">Betrag</th><th>Verträge</th><th>Notiz</th><th></th></tr></thead><tbody>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Monat</th><th class="num">Betrag</th><th>Verträge</th><th>Notiz</th><th></th></tr></thead><tbody>';
     pays.forEach(function (pp) {
       var names = (pp.contracts || []).map(function (key) {
         var c = B.contracts.find(function (x) { return x.key === key; });
         return c ? '<button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> <span class="muted">' + esc(c.custLabel || c.custName || '') + '</span>' : '<span class="muted">' + esc(key.replace(/^[AF]:/, '')) + '</span>';
       });
-      h += '<tr><td>' + esc(isoToDmy(pp.date)) + '</td><td class="num">' + eur(pp.amount) + '</td><td class="wrap">' + (names.length ? names.join('<br>') : '<span class="pill warn">nicht zugeordnet</span>') + '</td>' +
+      h += '<tr><td>' + esc(monthLabel(payMonth(pp))) + '</td><td class="num">' + eur(pp.amount) + '</td><td class="wrap">' + (names.length ? names.join('<br>') : '<span class="pill warn">nicht zugeordnet</span>') + '</td>' +
         '<td class="wrap">' + esc(pp.note || '') + '</td><td><button type="button" class="btn small danger" data-act="payundo" data-id="' + esc(pp.id) + '">Aufheben</button></td></tr>';
     });
     return h + '</tbody></table></div></div>';
@@ -3084,11 +3179,18 @@ body.shelf-on .shelf {
     }
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.dataset.act, rules = B.data.rules, idx = Number(b.dataset.i);
-    if (act === 'paynew') { B.pay = B.pay || { amount: null, date: isoToday(), note: '', result: null }; openBiz({ kind: 'payment' }); var pa = $('#payAmount'); if (pa) pa.focus(); return; }
+    if (act === 'paynew') { B.pay = B.pay || newPay(); openBiz({ kind: 'payment' }); var pa = $('#payAmount'); if (pa) pa.focus(); return; }
+    if (act === 'payonly') {
+      var amt0 = parseNum($('#payAmount').value);
+      if (amt0 === null || isNaN(amt0) || amt0 <= 0) { toast('Bitte den Betrag eintragen, z. B. 2.694,56.'); return; }
+      readPayForm(amt0);
+      B.data.payments.push({ id: 'P' + Date.now(), month: B.pay.month, date: B.pay.date, amount: B.pay.amount, note: B.pay.note || '', contracts: [], factorsSet: [], installedSet: [] });
+      saveData(); toast(eur(B.pay.amount) + ' für ' + monthLabel(B.pay.month) + ' eingetragen.'); B.pay = newPay(); renderBiz(); return;
+    }
     if (act === 'paysearch') {
       var amt = parseNum($('#payAmount').value);
       if (amt === null || isNaN(amt) || amt <= 0) { toast('Bitte den erhaltenen Betrag eintragen, z. B. 2.694,56.'); return; }
-      B.pay.amount = round2(amt); B.pay.date = $('#payDate').value || isoToday(); B.pay.note = $('#payNote').value.trim();
+      readPayForm(amt);
       B.pay.result = findCombos(B.pay.amount);
       renderBiz();
       return;
@@ -3101,8 +3203,8 @@ body.shelf-on .shelf {
     }
     if (act === 'paysave') {
       if (!B.pay || !B.pay.amount) return;
-      B.data.payments.push({ id: 'P' + Date.now(), date: B.pay.date || isoToday(), amount: B.pay.amount, note: B.pay.note || '', contracts: [], factorsSet: [], installedSet: [] });
-      saveData(); B.pay = { amount: null, date: isoToday(), note: '', result: null };
+      B.data.payments.push({ id: 'P' + Date.now(), month: B.pay.month || curMonth(), date: B.pay.date || isoToday(), amount: B.pay.amount, note: B.pay.note || '', contracts: [], factorsSet: [], installedSet: [] });
+      saveData(); B.pay = newPay();
       toast('Zahlung ohne Zuordnung gespeichert.'); renderBiz(); return;
     }
     if (act === 'payundo') {
@@ -3148,6 +3250,37 @@ body.shelf-on .shelf {
       return;
     }
     if (act === 'rules') openBiz({ kind: 'rules' });
+    else if (act === 'yearview') openBiz({ kind: 'year' });
+    else if (act === 'filter') { B.filter = b.dataset.v; renderBiz(); }
+    else if (act === 'bulk') { B.bulk = !B.bulk; B.sel = new Set(); renderBiz(); }
+    else if (act === 'selall') { B.visible.forEach(function (k) { B.sel.add(k); }); renderBiz(); }
+    else if (act === 'selnone') { B.sel = new Set(); renderBiz(); }
+    else if (act === 'bulkset') {
+      if (!B.sel.size) { toast('Erst Verträge auswählen.'); return; }
+      var bf = b.dataset.f, bv = b.dataset.v === '1', nn = 0;
+      B.contracts.forEach(function (c) {
+        if (!B.sel.has(c.key)) return;
+        var mm = meta(c);
+        if (!!mm[bf] === bv) return;
+        mm[bf] = bv; mm[bf + 'At'] = bv ? Date.now() : null; nn++;
+        if (bf === 'billed' && !bv) delete mm.legacy;
+      });
+      saveData(); B.sel = new Set();
+      toast(nn + (nn === 1 ? ' Vertrag ' : ' Verträge ') + (bf === 'billed' ? (bv ? 'als abgerechnet markiert.' : 'wieder offen.') : 'als installiert markiert.'));
+      rerender();
+    }
+    else if (act === 'bulkuntil') {
+      var until = $('#bulkUntil').value;
+      if (!until) { toast('Bitte ein Datum wählen, z. B. 31.12.2026.'); return; }
+      B.bulkUntil = until;
+      var hits = B.contracts.filter(function (c) { return isoOf(c.signed) <= until && !meta(c).billed; });
+      if (!hits.length) { toast('Bis zu diesem Datum ist schon alles abgehakt.'); return; }
+      armConfirm(b, hits.length + (hits.length === 1 ? ' Vertrag' : ' Verträge') + ' abhaken?', function () {
+        hits.forEach(function (c) { var mm = meta(c); mm.billed = true; mm.billedAt = Date.now(); mm.legacy = true; });
+        saveData(); toast(hits.length + (hits.length === 1 ? ' Vertrag' : ' Verträge') + ' bis ' + isoToDmy(until) + ' als abgerechnet abgehakt. Einzelne kannst du wieder aufmachen.', { ms: 6000 });
+        rerender();
+      });
+    }
     else if (act === 'csv') exportCsv();
     else if (act === 'pdf') {
       var c = B.contracts.find(function (x) { return x.key === b.dataset.key; });
@@ -3172,7 +3305,14 @@ body.shelf-on .shelf {
   });
   bizEl.addEventListener('change', function (e) {
     var t = e.target;
-    if (t.id === 'yearSel') { B.year = Number(t.value); rerender(); return; }
+    if (t.id === 'yearSel') { B.year = Number(t.value); B.sel = new Set(); rerender(); return; }
+    if (t.id === 'yYearSel') { B.yYear = Number(t.value); rerender(); return; }
+    if (t.id === 'sortSel') { B.sort = t.value; rerender(); return; }
+    if (t.dataset && t.dataset.sel) {
+      if (t.checked) B.sel.add(t.dataset.sel); else B.sel.delete(t.dataset.sel);
+      var sc = $('#selCount'); if (sc) sc.textContent = B.sel.size + ' ausgewählt';
+      return;
+    }
     var key = t.dataset && t.dataset.key, f = t.dataset && t.dataset.f;
     if (!key || !f) return;
     if (key === 'kitiers') {
@@ -3207,6 +3347,7 @@ body.shelf-on .shelf {
       m.existing = t.checked;
     } else if (f === 'installed' || f === 'billed') {
       m[f] = t.checked; m[f + 'At'] = t.checked ? Date.now() : null;
+      if (f === 'billed' && !t.checked) delete m.legacy;
     } else if (f === 'factor' || f === 'provOverride') {
       var v = parseNum(t.value);
       if (v !== null && (isNaN(v) || v < 0 || (f === 'factor' && v > 5))) {

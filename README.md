@@ -123,12 +123,16 @@ In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provisio
 
 Unten auf der Regel-Seite steht jede Position aus deinen Verträgen mit der Regel, die für sie gilt. So sieht man sofort, wenn ein neues Produkt eine eigene Regel braucht.
 
-**Gezahlte Provision zuordnen:** In der Übersicht auf **Zahlung eintragen** klicken, den erhaltenen Betrag und das Eingangsdatum eintragen und **Passende Verträge suchen**. Die App sucht unter allen Verträgen, die noch nicht abgerechnet sind, eine Kombination, deren Auszahlungen zusammen den Betrag ergeben. Verträge ohne Häkchen bei „Installiert“ sind mit dabei. Abweichungen bis 2 € gelten als Rundung.
-- Vorschläge, bei denen alle Faktoren schon eingetragen sind, stehen oben.
-- Fehlt bei Verträgen der Faktor, rechnet die App mit 0,6 bis 1,2 und zeigt, welcher Faktor sich aus der Zahlung ergäbe („wäre 0,9“).
-- **Diese Zuordnung übernehmen** hakt die Verträge als abgerechnet ab (mit dem Eingangsdatum), trägt fehlende Faktoren ein und setzt vergessene „Installiert“-Häkchen.
-- Unten stehen alle bisherigen Zahlungen. **Aufheben** macht eine Zuordnung samt der dabei gesetzten Faktoren und Häkchen rückgängig.
-- Passt nichts, lässt sich die Zahlung auch ohne Zuordnung speichern. Die Kachel **Eingegangen** zeigt die Summe der Zahlungen im Jahr.
+**Filtern, sortieren, mehrere abhaken:** Über der Vertragsliste wählst du *Alle / Nicht abgerechnet / Abgerechnet* und die Sortierung (neueste, älteste, Kunde, Provision). Im Jahresfeld gibt es zusätzlich **Alle Jahre**. Mit **Mehrere abhaken** erscheint vor jedem Vertrag ein Auswahlkästchen. Die ausgewählten Verträge lassen sich auf einmal als abgerechnet oder installiert markieren.
+
+**Altbestand:** Im selben Bereich steht „Altbestand: alles unterschrieben bis … als abgerechnet abhaken“. Damit hakst du alle alten Verträge bis zu einem Datum auf einmal ab. Sie bekommen den Vermerk „Altbestand“. Was davon noch nicht bezahlt ist, nimmst du einzeln wieder heraus (Häkchen „Abgerechnet“ entfernen). Ab dann läuft alles Neue sauber über Faktor, Abrechnung und Zahlungen.
+
+**Zahlungen eintragen:** In der Übersicht auf **Zahlung eintragen** klicken, Betrag und **Abrechnungsmonat** aus der Monatsabrechnung eintragen.
+- **Nur eintragen** speichert die Zahlung direkt für die Jahresübersicht, ohne Verträge zuzuordnen.
+- **Passende Verträge suchen** sucht zusätzlich unter allen noch nicht abgerechneten Verträgen eine Kombination, deren Auszahlungen den Betrag ergeben, auch unter nicht installierten. Abweichungen bis 2 € gelten als Rundung. Fehlt ein Faktor, rechnet die App mit 0,6 bis 1,2 und zeigt, welcher Faktor sich ergäbe. **Diese Zuordnung übernehmen** hakt die Verträge als abgerechnet ab, trägt fehlende Faktoren ein und setzt vergessene „Installiert“-Häkchen.
+- Unten stehen alle Zahlungen nach Monat. **Aufheben** macht eine Zahlung samt Zuordnung rückgängig.
+
+**Jahresübersicht:** Pro Monat: Anzahl Verträge, Provision und Auszahlung nach Unterschriftsdatum, Eingegangen nach Abrechnungsmonat, dazu die Jahressummen. Oben rechts das Jahr wählen, z. B. 2027 als sauberen Start. Nach der ersten Zahlung im Jahr zeigt die Übersicht Monate ohne Zahlung als „keine Zahlung“, so fällt eine fehlende Abrechnung auf.
 
 **Eingescannte Verträge:** Ein Scan enthält keinen Text, die App kann daraus also weder Kunde noch Preise lesen. Solche Verträge stehen in der Übersicht mit „Scan“. In der Vertragsansicht auf **Original-Angebot verknüpfen** klicken und das digitale Angebot aus dem Angebote-Ordner wählen. Kunde, Kundennummer, Positionen und Provision kommen dann exakt aus dem Original, das unterschriebene Dokument bleibt der Scan. Das Original gilt danach in der Angebotsliste als unterschrieben. Die Verknüpfung lässt sich jederzeit wieder lösen.
 
