@@ -261,6 +261,54 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
 .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .btn.danger { color: var(--danger); }
 
+/* Offer shelf (OneDrive folders, desktop Edge/Chrome) */
+.desk { display: block; }
+.shelf { display: none; background: var(--surface); border-right: 1px solid var(--line); }
+body.shelf-on .shelf {
+  display: flex; flex-direction: column; overflow: hidden;
+  position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--bar-h, 0px));
+  height: calc(100vh - var(--bar-h, 0px) - env(safe-area-inset-top, 0px));
+}
+@media (min-width: 900px) {
+  body.shelf-on .desk { display: grid; grid-template-columns: minmax(270px, 330px) minmax(0, 1fr); align-items: start; }
+}
+@media (max-width: 899px) {
+  body.shelf-on .shelf {
+    position: fixed; left: 0; bottom: 0; z-index: 22; width: min(360px, 92vw); height: auto;
+    padding-left: env(safe-area-inset-left, 0px); box-shadow: var(--shadow);
+  }
+}
+.shelf-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.shelf-eyebrow { font: 600 11.5px/1.2 var(--f-cond); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+.shelf-title { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.shelf-box { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; overflow: auto; }
+.shelf-box p { margin: 0; color: var(--muted); }
+.pick { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.pick-label { font-size: 13px; color: var(--muted); }
+.pick-name { font-weight: 600; overflow-wrap: anywhere; }
+.pick .btn { justify-self: start; }
+.shelf-ready { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.shelf-tools { display: flex; flex-direction: column; gap: 8px; padding: 10px 16px; }
+.shelf-tools input {
+  font: 400 15px/1.3 var(--f-sans); padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface-2); color: var(--ink); width: 100%;
+}
+.shelf-list { list-style: none; margin: 0; padding: 2px 8px 12px; overflow: auto; flex: 1; min-height: 0; }
+.shelf-item {
+  width: 100%; text-align: left; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px;
+  padding: 9px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink); cursor: pointer; font: inherit;
+}
+.shelf-item:hover { background: var(--surface-2); }
+.shelf-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.shelf-item.is-current { background: var(--accent-soft); }
+.si-name { font-weight: 500; overflow-wrap: anywhere; }
+.si-meta { grid-column: 1; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.si-badge { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 11.5px; font-weight: 600; color: var(--ok); }
+.si-empty { padding: 12px 10px; color: var(--muted); }
+.shelf-foot { border-top: 1px solid var(--line); padding: 10px 16px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.shelf-foot strong { color: var(--ink); font-weight: 600; }
+.btn.small { min-height: 32px; padding: 0 10px; font-size: 13.5px; }
+
 /* Organizer */
 .org-head { max-width: 980px; margin: 0 auto 16px; color: var(--muted); }
 .org-head p { margin: 0; max-width: 62ch; }
@@ -362,6 +410,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
       <span class="brand-doc" id="docTitle">Wird geladen …</span>
     </div>
     <div class="actions">
+      <button class="btn" type="button" id="shelfBtn" aria-pressed="false" aria-controls="shelf" hidden>Angebote</button>
       <label class="btn" for="fileInput" id="openLabel">PDF öffnen</label>
       <input class="vh" type="file" id="fileInput" accept="application/pdf,.pdf" multiple>
       <button class="btn" type="button" id="viewBtn" aria-pressed="false">Seiten ordnen</button>
@@ -385,9 +434,42 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
   </div>
 </header>
 
+<div class="desk">
+<aside class="shelf" id="shelf" aria-label="Angebote aus OneDrive">
+  <div class="shelf-head">
+    <div>
+      <div class="shelf-eyebrow">OneDrive-Ordner</div>
+      <div class="shelf-title" id="shelfTitle">Angebote</div>
+    </div>
+    <button class="btn small" type="button" id="shelfRefresh" hidden>Aktualisieren</button>
+  </div>
+  <div class="shelf-box" id="shelfSetupBox" hidden>
+    <p>Wähle einmal die beiden Ordner aus deinem OneDrive. Die App merkt sich die Auswahl auf diesem Rechner.</p>
+    <div class="pick"><span class="pick-label">Angebote zum Unterschreiben</span><span class="pick-name" id="pickInName">noch nicht gewählt</span><button class="btn" type="button" id="pickIn">Ordner wählen</button></div>
+    <div class="pick"><span class="pick-label">Ablage für unterschriebene PDFs</span><span class="pick-name" id="pickOutName">noch nicht gewählt</span><button class="btn" type="button" id="pickOut">Ordner wählen</button></div>
+    <button class="btn primary" type="button" id="pickDone" disabled>Fertig</button>
+  </div>
+  <div class="shelf-box" id="shelfPromptBox" hidden>
+    <p>Nach einem Neustart braucht die App einmal deine Erlaubnis für die OneDrive-Ordner.</p>
+    <button class="btn primary" type="button" id="grantBtn">Zugriff erlauben</button>
+  </div>
+  <div class="shelf-ready" id="shelfReadyBox" hidden>
+    <div class="shelf-tools">
+      <input type="search" id="shelfSearch" placeholder="Angebot suchen" aria-label="Angebot suchen" autocomplete="off">
+      <div class="seg" role="group" aria-label="Filter">
+        <button type="button" data-filter="open" aria-pressed="true">Offen</button><button type="button" data-filter="all" aria-pressed="false">Alle</button>
+      </div>
+    </div>
+    <ul class="shelf-list" id="shelfList"></ul>
+  </div>
+  <div class="shelf-foot" id="shelfFoot" hidden>
+    <span>Unterschriebene landen in <strong id="shelfOut">–</strong></span>
+    <button class="link-btn" type="button" id="shelfSetup">Ordner ändern</button>
+  </div>
+</aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 4</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 5</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -400,6 +482,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
   <div class="pages" id="pages"></div>
   <div id="organizer" hidden></div>
 </main>
+</div>
 
 <div class="pad" id="pad" role="dialog" aria-modal="true" aria-labelledby="padTitle" hidden>
   <div class="pad-top">
@@ -550,12 +633,13 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     return '„' + name + '“ konnte nicht gelesen werden. Ist es eine gültige PDF-Datei?';
   }
 
-  async function addFiles(list) {
+  async function addFiles(list, opts) {
     var files = Array.prototype.filter.call(list, function (f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
     if (!files.length) { toast('Bitte eine PDF-Datei auswählen.'); return; }
     setView('pages');
     busy(true, files.length > 1 ? files.length + ' PDFs werden geöffnet …' : 'PDF wird geöffnet …');
-    if (S.isSample || !S.pages.length) resetAll();
+    if (S.isSample || !S.pages.length || (opts && opts.replace)) resetAll();
+    if (!(opts && opts.fromShelf)) { F.current = null; markCurrent(); }
     var before = S.zones.length, added = 0, failed = [];
     for (var i = 0; i < files.length; i++) {
       try {
@@ -571,14 +655,14 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     if (added) {
       var n = S.zones.length - before;
       toast(n ? n + (n === 1 ? ' Unterschriftsstelle' : ' Unterschriftsstellen') + ' erkannt.'
-              : 'Keine Unterschriftsstelle erkannt. Lege sie mit „Stelle setzen“ selbst fest.', { ms: 4500 });
+              : 'Keine Unterschriftsstelle erkannt. Lege sie über „Hinzufügen“ → „Unterschrift“ selbst fest.', { ms: 4500 });
     }
   }
 
   function resetAll() {
     S.pages.forEach(function (p) { if (p.task) { try { p.task.cancel(); } catch (e) {} } });
     S.docs.forEach(function (d) { try { d.pdf.destroy(); } catch (e) {} });
-    S.docs = []; S.pages = []; S.zones = []; S.fields = []; S.selected = null; S.isSample = false;
+    S.docs = []; S.pages = []; S.zones = []; S.fields = []; S.selected = null; S.isSample = false; S.unsaved = false;
     diagLog = []; diagErrors = [];
   }
 
@@ -956,6 +1040,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     S.zones.push(z); refreshZone(z);
   }
   function clearSig(z) {
+    S.unsaved = true;
     S.selected = null;
     if (z.source === 'manual') { removeZone(z); toast('Unterschrift entfernt.'); return; }
     z.sig = null; Object.assign(z, z.orig);
@@ -1138,6 +1223,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     S.selected = null; markSel();
     if (f.kind === 'check') {
       var v = !(f.acro && !f.dirty ? f.checked : f.checked);
+      S.unsaved = true;
       siblings(f).forEach(function (o) { o.checked = v; if (o.acro) o.dirty = true; refreshField(o); });
       return;
     }
@@ -1185,6 +1271,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     e.preventDefault();
     var f = fd.f; if (!f) return;
     var val = $('#fdValue').value.replace(/\s+$/, '');
+    S.unsaved = true;
     if (f.acro) {
       siblings(f).forEach(function (o) { o.value = val; o.dirty = true; refreshField(o); });
     } else {
@@ -1358,6 +1445,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     return { png: oc.toDataURL('image/png'), ar: bw / bh };
   }
   function applySig(z, sig) {
+    S.unsaved = true;
     var box = z.sig
       ? { x: z.x, y: z.y + z.h - Math.max(z.h, z.orig.h), w: Math.max(z.w, z.orig.w), h: Math.max(z.h, z.orig.h) }
       : z.orig;
@@ -1652,8 +1740,224 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
       return;
     }
     busy(false);
-    await deliver(bytes, outName());
+    var name = outName();
+    if (F.state === 'ready') {
+      try {
+        if (!(await perm(F.outDir, true))) throw new Error('kein Zugriff auf den Ordner');
+        var saved = await saveToFolder(bytes, name);
+        S.unsaved = false;
+        toast('Gespeichert in „' + F.outDir.name + '“: ' + saved, { actionLabel: 'Zusätzlich teilen', action: function () { deliver(bytes, saved); }, ms: 8000 });
+        refreshShelf();
+        return;
+      } catch (e) {
+        console.warn(e);
+        toast('Speichern im OneDrive-Ordner hat nicht geklappt (' + e.message + '). Die Datei wird stattdessen angeboten.', { ms: 7000 });
+      }
+    }
+    S.unsaved = false;
+    await deliver(bytes, name);
   }
+
+  /* ---------- OneDrive folders (Edge/Chrome on a computer) ---------- */
+  var FS_OK = typeof window.showDirectoryPicker === 'function' && window.self === window.top;
+  var F = { inDir: null, outDir: null, state: 'off', entries: [], filter: 'open', q: '', current: null, loading: false };
+  var shelfBtn = $('#shelfBtn');
+
+  function idb() {
+    return new Promise(function (resolve, reject) {
+      var r = indexedDB.open('unterschriftenmappe', 1);
+      r.onupgradeneeded = function () { r.result.createObjectStore('kv'); };
+      r.onsuccess = function () { resolve(r.result); };
+      r.onerror = function () { reject(r.error); };
+    });
+  }
+  async function kvGet(k) {
+    var db = await idb();
+    return new Promise(function (resolve, reject) {
+      var q = db.transaction('kv').objectStore('kv').get(k);
+      q.onsuccess = function () { resolve(q.result); }; q.onerror = function () { reject(q.error); };
+    });
+  }
+  async function kvSet(k, v) {
+    var db = await idb();
+    return new Promise(function (resolve, reject) {
+      var tx = db.transaction('kv', 'readwrite');
+      tx.objectStore('kv').put(v, k);
+      tx.oncomplete = function () { resolve(); }; tx.onerror = function () { reject(tx.error); };
+    });
+  }
+  async function perm(h, ask) {
+    if (!h) return false;
+    var o = { mode: 'readwrite' };
+    try {
+      if ((await h.queryPermission(o)) === 'granted') return true;
+      if (ask && (await h.requestPermission(o)) === 'granted') return true;
+    } catch (e) { console.warn(e); }
+    return false;
+  }
+  function setBarH() { document.documentElement.style.setProperty('--bar-h', document.querySelector('.bar').offsetHeight + 'px'); }
+  function narrow() { return window.matchMedia('(max-width: 899px)').matches; }
+  function showShelf(on) {
+    document.body.classList.toggle('shelf-on', on);
+    shelfBtn.setAttribute('aria-pressed', String(on));
+    setBarH();
+    if (S.view === 'pages') requestAnimationFrame(layout);
+  }
+
+  async function fsInit() {
+    if (!FS_OK) return;
+    shelfBtn.hidden = false;
+    setBarH();
+    try { F.inDir = await kvGet('inDir'); F.outDir = await kvGet('outDir'); } catch (e) { console.warn(e); }
+    if (!F.inDir || !F.outDir) { F.state = 'setup'; renderShelf(); return; }
+    if ((await perm(F.inDir, false)) && (await perm(F.outDir, false))) { F.state = 'ready'; showShelf(!narrow()); await refreshShelf(); }
+    else { F.state = 'prompt'; renderShelf(); showShelf(!narrow()); }
+  }
+
+  async function pick(which) {
+    try {
+      var h = await window.showDirectoryPicker({ id: which === 'in' ? 'angebote' : 'unterschrieben', mode: 'readwrite', startIn: 'documents' });
+      if (which === 'in') F.inDir = h; else F.outDir = h;
+      renderShelf();
+    } catch (e) {
+      if (e && e.name !== 'AbortError') toast('Der Ordner konnte nicht gewählt werden (' + e.message + ').');
+    }
+  }
+  async function finishSetup() {
+    if (!F.inDir || !F.outDir) return;
+    try {
+      if (await F.inDir.isSameEntry(F.outDir)) { toast('Bitte zwei verschiedene Ordner wählen: einen für Angebote, einen für Unterschriebene.', { ms: 6000 }); return; }
+    } catch (e) {}
+    try { await kvSet('inDir', F.inDir); await kvSet('outDir', F.outDir); } catch (e) { console.warn(e); toast('Die Ordnerwahl konnte nicht gespeichert werden und gilt nur bis zum Neustart.'); }
+    F.state = 'ready';
+    await refreshShelf();
+  }
+
+  function cleanBase(name) { return name.replace(/\.pdf$/i, '').replace(/[\\/:*?"<>|]+/g, '-').trim().toLowerCase(); }
+  async function walk(dir, path, depth, out) {
+    for await (var pair of dir.entries()) {
+      var name = pair[0], h = pair[1];
+      if (h.kind === 'file' && /\.pdf$/i.test(name)) {
+        var f = await h.getFile();
+        out.push({ name: name, path: path, handle: h, mtime: f.lastModified });
+      } else if (h.kind === 'directory' && depth < 3) {
+        var same = false;
+        try { same = await h.isSameEntry(F.outDir); } catch (e) {}
+        if (!same) await walk(h, path ? path + ' › ' + name : name, depth + 1, out);
+      }
+    }
+  }
+  async function refreshShelf() {
+    if (F.state !== 'ready') { renderShelf(); return; }
+    F.loading = true; renderShelf();
+    try {
+      var signed = [];
+      for await (var pair of F.outDir.entries()) { if (pair[1].kind === 'file') signed.push(pair[0].toLowerCase()); }
+      var list = [];
+      await walk(F.inDir, '', 0, list);
+      list.forEach(function (e) {
+        var base = cleanBase(e.name) + '_unterschrieben';
+        e.signed = signed.some(function (n) { return n.indexOf(base) === 0; });
+      });
+      list.sort(function (a, b) { return b.mtime - a.mtime; });
+      F.entries = list;
+    } catch (e) {
+      console.warn(e);
+      if (e && e.name === 'NotAllowedError') F.state = 'prompt';
+      else toast('Der OneDrive-Ordner konnte nicht gelesen werden (' + e.message + ').', { ms: 6000 });
+    }
+    F.loading = false; renderShelf();
+  }
+
+  function fmtDate(ms) {
+    var d = new Date(ms);
+    return String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear();
+  }
+  function renderShelf() {
+    $('#shelfSetupBox').hidden = F.state !== 'setup';
+    $('#shelfPromptBox').hidden = F.state !== 'prompt';
+    $('#shelfReadyBox').hidden = F.state !== 'ready';
+    $('#shelfFoot').hidden = F.state !== 'ready';
+    $('#shelfRefresh').hidden = F.state !== 'ready';
+    $('#shelfTitle').textContent = F.state === 'setup' ? 'Einrichten' : (F.inDir ? F.inDir.name : 'Angebote');
+    $('#shelfOut').textContent = F.outDir ? F.outDir.name : '–';
+    $('#pickInName').textContent = F.inDir ? F.inDir.name : 'noch nicht gewählt';
+    $('#pickOutName').textContent = F.outDir ? F.outDir.name : 'noch nicht gewählt';
+    $('#pickDone').disabled = !(F.inDir && F.outDir);
+    if (F.state !== 'ready') return;
+    var ul = $('#shelfList');
+    ul.textContent = '';
+    var msg = function (t) { var li = document.createElement('li'); li.className = 'si-empty'; li.textContent = t; ul.appendChild(li); };
+    if (F.loading && !F.entries.length) { msg('Wird geladen …'); return; }
+    var q = F.q.trim().toLowerCase();
+    var items = F.entries.filter(function (e) {
+      return (F.filter === 'all' || !e.signed) && (!q || (e.name + ' ' + e.path).toLowerCase().indexOf(q) >= 0);
+    });
+    if (!items.length) {
+      msg(!F.entries.length ? 'In diesem Ordner liegen keine PDFs.' : q ? 'Nichts gefunden.' : 'Alle Angebote sind unterschrieben. Unter „Alle“ siehst du sie.');
+      return;
+    }
+    items.forEach(function (e) {
+      var li = document.createElement('li');
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'shelf-item' + (F.current === e ? ' is-current' : '');
+      var n = document.createElement('span'); n.className = 'si-name'; n.textContent = e.name.replace(/\.pdf$/i, '');
+      var m = document.createElement('span'); m.className = 'si-meta'; m.textContent = (e.path ? e.path + ' · ' : '') + fmtDate(e.mtime);
+      b.appendChild(n); b.appendChild(m);
+      if (e.signed) { var s2 = document.createElement('span'); s2.className = 'si-badge'; s2.textContent = 'unterschrieben'; b.appendChild(s2); }
+      b.addEventListener('click', function () { openEntry(e); });
+      e.btn = b;
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  function markCurrent() {
+    F.entries.forEach(function (e) { if (e.btn) e.btn.classList.toggle('is-current', e === F.current); });
+  }
+  async function openEntry(e) {
+    if (S.unsaved) {
+      toast('Die aktuellen Änderungen sind noch nicht gespeichert.', { actionLabel: 'Trotzdem öffnen', action: function () { S.unsaved = false; openEntry(e); }, ms: 7000 });
+      return;
+    }
+    try {
+      var file = await e.handle.getFile();
+      F.current = e; markCurrent();
+      if (narrow()) showShelf(false);
+      await addFiles([file], { replace: true, fromShelf: true });
+    } catch (err) {
+      console.warn(err);
+      toast('Die Datei konnte nicht geöffnet werden (' + err.message + ').', { ms: 6000 });
+    }
+  }
+  async function exists(dir, n) { try { await dir.getFileHandle(n); return true; } catch (e) { return false; } }
+  async function saveToFolder(bytes, name) {
+    var n = name, i = 2;
+    while (await exists(F.outDir, n)) { n = name.replace(/\.pdf$/i, '') + ' (' + (i++) + ').pdf'; }
+    var fh = await F.outDir.getFileHandle(n, { create: true });
+    var w = await fh.createWritable();
+    await w.write(new Blob([bytes], { type: 'application/pdf' }));
+    await w.close();
+    return n;
+  }
+
+  shelfBtn.addEventListener('click', function () { showShelf(!document.body.classList.contains('shelf-on')); });
+  $('#pickIn').addEventListener('click', function () { pick('in'); });
+  $('#pickOut').addEventListener('click', function () { pick('out'); });
+  $('#pickDone').addEventListener('click', finishSetup);
+  $('#shelfSetup').addEventListener('click', function () { F.state = 'setup'; renderShelf(); });
+  $('#shelfRefresh').addEventListener('click', refreshShelf);
+  $('#grantBtn').addEventListener('click', async function () {
+    var a = await perm(F.inDir, true), b = a && (await perm(F.outDir, true));
+    if (a && b) { F.state = 'ready'; await refreshShelf(); }
+    else toast('Ohne Erlaubnis kann die App die Ordner nicht lesen. Du kannst sie unter „Ordner ändern“ neu wählen.', { ms: 6000 });
+  });
+  $('#shelfSearch').addEventListener('input', function (e) { F.q = e.target.value; renderShelf(); });
+  document.querySelectorAll('#shelfReadyBox [data-filter]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      F.filter = b.dataset.filter;
+      document.querySelectorAll('#shelfReadyBox [data-filter]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+      renderShelf();
+    });
+  });
 
   /* ---------- wiring ---------- */
   fileInput.addEventListener('change', function () {
@@ -1680,6 +1984,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     clearTimeout(rt);
     rt = setTimeout(function () {
       if (!pad.el.hidden) { sizePad(); drawPad(); }
+      if (FS_OK) setBarH();
       if (S.view === 'pages') layout();
     }, 150);
   });
@@ -1722,6 +2027,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     }
     pdfjsLib.GlobalWorkerOptions.workerSrc = await workerUrl();
     await loadSample();
+    await fsInit();
   }
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

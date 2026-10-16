@@ -56,7 +56,40 @@ Unter **Seiten ordnen** lässt sich die Reihenfolge ändern, und überflüssige 
 
 ---
 
-## 4. Aus anderen Apps „zur Unterschrift“ schicken
+## 4. Mit OneDrive arbeiten
+
+### Am Windows-PC: Angebote-Liste mit fester Ablage
+
+Am PC zeigt die App links eine Liste aller Angebote aus einem OneDrive-Ordner. Ein Klick öffnet das Angebot, und **Speichern** legt das unterschriebene PDF direkt in einem zweiten Ordner ab. OneDrive synchronisiert es von dort wie gewohnt. Das funktioniert mit **Microsoft Edge** oder **Google Chrome**, Voraussetzung ist der normale OneDrive-Ordner im Explorer.
+
+**Einmal einrichten:**
+
+1. Die Adresse in Edge öffnen.
+2. Als Programm installieren: **…** (oben rechts) → **Apps** → **Diese Website als App installieren**. Danach liegt die Unterschriftenmappe im Startmenü und kann an die Taskleiste angeheftet werden.
+3. In der App auf **Angebote** → **Ordner wählen** und im OneDrive den Ordner mit den Angeboten auswählen.
+4. Bei **Ablage für unterschriebene PDFs** den Zielordner wählen, z. B. `OneDrive › Unterschrieben`. Edge fragt einmal, ob die App dort speichern darf: **Dateien bearbeiten** bzw. **Zulassen**.
+5. **Fertig**. Die Liste erscheint.
+
+**Im Alltag:**
+
+- Die Liste zeigt neueste Angebote oben. Unterordner (z. B. pro Kunde) werden mit durchsucht.
+- **Offen** blendet bereits unterschriebene Angebote aus, **Alle** zeigt sie mit dem Vermerk „unterschrieben“. Als unterschrieben gilt ein Angebot, sobald im Zielordner eine Datei *Angebotsname_unterschrieben_…pdf* liegt.
+- Nach einem Neustart fragt Edge eventuell einmal nach, ob die App wieder auf die Ordner zugreifen darf: **Zugriff erlauben**. In der installierten App lässt sich das meist dauerhaft erlauben.
+- Gibt es den Dateinamen im Zielordner schon, wird nichts überschrieben, die neue Datei bekommt eine Nummer angehängt.
+- Die Ordnerwahl gilt nur für diesen PC und diesen Browser. Andere Kollegen richten sie bei sich einmal selbst ein.
+
+### Auf dem iPad: OneDrive in der Dateiauswahl
+
+Auf dem iPad gibt es diese Liste nicht, Safari erlaubt keinen dauerhaften Ordnerzugriff. Mit der **OneDrive-App** geht es trotzdem bequem:
+
+1. OneDrive-App aus dem App Store installieren und anmelden.
+2. In der App **Dateien** → **…** → **Bearbeiten** → **OneDrive** einschalten.
+3. In der Unterschriftenmappe **PDF öffnen** → **OneDrive** → Ordner *Angebote*. Die Dateiauswahl merkt sich den zuletzt benutzten Ordner.
+4. Nach dem Unterschreiben: **Speichern** → **Sichern oder teilen** → **In Dateien sichern** → **OneDrive** → *Unterschrieben*.
+
+---
+
+## 5. Aus anderen Apps „zur Unterschrift“ schicken
 
 Web-Apps können sich auf dem iPad leider nicht selbst ins Teilen-Menü eintragen, das geht nur mit einer App aus dem App Store. Ein Kurzbefehl kommt aber nahe heran: Er legt das PDF in einem festen Ordner ab und öffnet die Unterschriftenmappe.
 
@@ -71,7 +104,7 @@ Web-Apps können sich auf dem iPad leider nicht selbst ins Teilen-Menü eintrage
 
 ---
 
-## 5. Updates einspielen
+## 6. Updates einspielen
 
 1. Die geänderten Dateien im Repository hochladen (**Add file** → **Upload files**). Vorhandene Dateien mit gleichem Namen werden ersetzt.
 2. In `sw.js` die Zeile `const VERSION = 'v…';` hochzählen.
@@ -80,15 +113,15 @@ Web-Apps können sich auf dem iPad leider nicht selbst ins Teilen-Menü eintrage
 
 ---
 
-## 6. Datenschutz
+## 7. Datenschutz
 
-- **Verträge, Feldinhalte und Unterschriften** verlassen das iPad nie. Es gibt keinen Server, der Dokumente empfängt.
+- **Verträge, Feldinhalte und Unterschriften** werden nur auf dem Gerät verarbeitet. Es gibt keinen Server der App, der Dokumente empfängt. Im OneDrive landen sie nur dort, wo du selbst speicherst.
 - **GitHub** liefert nur die App-Dateien aus.
 - **Keine externen Anbieter:** Die PDF-Bibliotheken liegen in diesem Repository (`lib/`), Schriften kommen vom Gerät selbst. Es werden keine Dateien von Google, Cloudflare oder anderen Diensten nachgeladen.
 
 ---
 
-## 7. Fehlersuche auf dem iPad
+## 8. Fehlersuche auf dem iPad
 
 Wenn die App eine Unterschriftsstelle nicht erkennt, zeigt der Diagnose-Modus, was sie im PDF gefunden hat:
 
@@ -99,7 +132,7 @@ Danach das Beispiel oder ein eigenes PDF öffnen. Unten erscheint ein Bericht. M
 
 ---
 
-## 8. Grenzen der aktuellen Version
+## 9. Grenzen der aktuellen Version
 
 - Passwortgeschützte oder gegen Bearbeitung gesperrte PDFs werden abgelehnt.
 - Die automatische Erkennung braucht echten Text im PDF. Bei eingescannten Verträgen die Stelle über **Hinzufügen** → **Unterschrift** festlegen.
