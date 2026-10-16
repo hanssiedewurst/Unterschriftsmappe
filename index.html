@@ -383,10 +383,14 @@ body.shelf-on .shelf {
 .factor { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
 .factor.out { border-color: var(--danger); }
 .num-in { width: 90px; text-align: right; }
-.rules .txt { width: 100%; min-width: 200px; }
+.rules .txt { width: 100%; min-width: 170px; }
+.rules .txt.num-in { width: 72px; min-width: 0; }
+.rules .txt.date-in { width: 142px; min-width: 0; }
+.rules .sel { min-width: 0; }
 .row-btns { display: flex; gap: 6px; }
 .chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .tbl .ctr { text-align: center; }
+.txt.date-in { width: 150px; }
 .chk.existing { margin-top: 10px; font-size: 14px; }
 .chk input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
 .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; vertical-align: middle; }
@@ -602,7 +606,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 15</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 16</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2220,10 +2224,13 @@ body.shelf-on .shelf {
   var DEFAULT_RULES = [
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
-    { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 395, existing: true },
-    { sec: 'monthly', match: 'PersonalManager Grundgebühr', type: 'fixed', value: 395, existing: true },
+    { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 295, existing: true, until: '2026-12-31' },
+    { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 395, existing: true, from: '2027-01-01' },
+    { sec: 'monthly', match: 'PersonalManager Grundgebühr', type: 'fixed', value: 295, existing: true, until: '2026-12-31' },
+    { sec: 'monthly', match: 'PersonalManager Grundgebühr', type: 'fixed', value: 395, existing: true, from: '2027-01-01' },
     { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4, existing: true },
-    { sec: 'monthly', match: '', type: 'mult', value: 6 },
+    { sec: 'monthly', match: '', type: 'mult', value: 4, until: '2026-12-31' },
+    { sec: 'monthly', match: '', type: 'mult', value: 6, from: '2027-01-01' },
     { sec: 'onetime', match: '', type: 'none', value: 0 },
     { sec: 'service', match: '', type: 'none', value: 0 }
   ];
@@ -2286,6 +2293,20 @@ body.shelf-on .shelf {
             if (r.existing === undefined && /ki[-\s]?bundle|app\s+grundgeb|personalmanager\s+grundgeb/i.test(r.match || '')) r.existing = true;
           });
         }
+        if (!d.rulesVersion || d.rulesVersion < 4) {
+          // orders until 31.12.2026: 4 × monthly fee, App/PersonalManager 295 €; the saved values apply from 01.01.2027
+          var out = [];
+          B.data.rules.forEach(function (r) {
+            var mt = String(r.match || '').trim(), dated = r.from || r.until;
+            var grund = r.sec === 'monthly' && r.type === 'fixed' && /^(app|personalmanager)\s+grundgeb/i.test(mt);
+            var rest = r.sec === 'monthly' && r.type === 'mult' && !mt;
+            if (!dated && (grund || rest)) {
+              out.push(Object.assign({}, r, { value: grund ? 295 : 4, until: '2026-12-31' }));
+              out.push(Object.assign({}, r, { from: '2027-01-01' }));
+            } else out.push(r);
+          });
+          B.data.rules = out;
+        }
       }
     } catch (e) {
       if (e && e.name === 'NotFoundError') return;
@@ -2303,7 +2324,7 @@ body.shelf-on .shelf {
         var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
         var w = await fh.createWritable();
         await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
-                                       rulesVersion: 3, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments }, null, 2));
+                                       rulesVersion: 4, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments }, null, 2));
         await w.close();
       } catch (e) {
         console.warn(e);
@@ -2318,12 +2339,20 @@ body.shelf-on .shelf {
   }
 
   /* commission rules */
-  function ruleFor(item) {
+  function isoOf(ms) {
+    var d = ms ? new Date(ms) : new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function ruleActive(r, when) {
+    var day = isoOf(when);
+    return !(r.from && day < r.from) && !(r.until && day > r.until);
+  }
+  function ruleFor(item, when) {
     var name = item.name.toLowerCase();
     var rules = B.data.rules;
     for (var i = 0; i < rules.length; i++) {
       var r = rules[i];
-      if (r.sec !== item.section) continue;
+      if (r.sec !== item.section || !ruleActive(r, when)) continue;
       var mt = String(r.match || '').trim().toLowerCase();
       if (!mt || name.indexOf(mt) >= 0) return r;
     }
@@ -2334,6 +2363,12 @@ body.shelf-on .shelf {
     if (r.type === 'fixed') return Number(r.value) || 0;
     if (r.type === 'mult') return round2((Number(r.value) || 0) * item.total);
     return 0;
+  }
+  function ruleSpan(r) {
+    if (r.from && r.until) return ' <span class="muted">(' + isoToDmy(r.from) + ' bis ' + isoToDmy(r.until) + ')</span>';
+    if (r.from) return ' <span class="muted">(ab ' + isoToDmy(r.from) + ')</span>';
+    if (r.until) return ' <span class="muted">(bis ' + isoToDmy(r.until) + ')</span>';
+    return '';
   }
   function ruleText(r) {
     if (!r) return 'keine passende Regel';
@@ -2373,13 +2408,14 @@ body.shelf-on .shelf {
     return out;
   }
   /* existing customers buying HalloPetra: only the KI-Bundle share earns commission */
-  function kiRule() {
-    var r = B.data.rules.find(function (x) { return x.sec === 'monthly' && /ki[-\s]?bundle/i.test(String(x.match || '')); });
+  function kiRule(when) {
+    var r = B.data.rules.find(function (x) { return x.sec === 'monthly' && ruleActive(x, when) && /ki[-\s]?bundle/i.test(String(x.match || '')); });
     return r || { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4 };
   }
   function addonNames() {
     var n = B.data.rules.filter(function (r) { return r.existing && r.type !== 'none' && String(r.match || '').trim(); })
-      .map(function (r) { return String(r.match).trim().replace(/\s+Grundgebühr$/i, ''); });
+      .map(function (r) { return String(r.match).trim().replace(/\s+Grundgebühr$/i, ''); })
+      .filter(function (x, i, a) { return a.indexOf(x) === i; });
     return n.length ? n.join(', ') : 'keine Zusatzprodukte festgelegt';
   }
   function isKiItem(it) {
@@ -2390,9 +2426,9 @@ body.shelf-on .shelf {
   function calc(c) {
     var info = kiInfo(c), m = meta(c), existing = !!m.existing;
     var lines = expandItems(c, info).map(function (it) {
-      var r = ruleFor(it), l = { item: it, rule: r, prov: provOf(it, r) };
+      var r = ruleFor(it, c.signed), l = { item: it, rule: r, prov: provOf(it, r) };
       if (existing) {
-        if (isKiItem(it)) { l.rule = kiRule(); l.prov = provOf(it, l.rule); }
+        if (isKiItem(it)) { l.rule = kiRule(c.signed); l.prov = provOf(it, l.rule); }
         if (l.rule && l.rule.existing && l.rule.type !== 'none') l.addon = true;
         else { l.prov = 0; l.existing = true; }
       }
@@ -2793,7 +2829,7 @@ body.shelf-on .shelf {
     if (p.items && p.items.length) {
       h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bereich</th><th>Position</th><th class="num">Menge</th><th class="num">Betrag</th><th>Regel</th><th class="num">Provision</th></tr></thead><tbody>';
       k.lines.forEach(function (l) {
-        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + (l.item.from ? ' <span class="muted">aus „' + esc(l.item.from) + '“</span>' : '') + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.incl ? '<span class="muted">im Preis enthalten</span>' : l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + (l.existing ? 'Bestandskunde, keine' : esc(ruleText(l.rule)) + (l.addon ? ' <span class="muted">(Zusatzprodukt)</span>' : '')) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
+        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + (l.item.from ? ' <span class="muted">aus „' + esc(l.item.from) + '“</span>' : '') + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.incl ? '<span class="muted">im Preis enthalten</span>' : l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + (l.existing ? 'Bestandskunde, keine' : esc(ruleText(l.rule)) + (l.rule && (l.rule.from || l.rule.until) ? ruleSpan(l.rule) : '') + (l.addon ? ' <span class="muted">(Zusatzprodukt)</span>' : '')) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
       });
       h += '</tbody><tfoot><tr><td colspan="5">Provision laut Regeln</td><td class="num">' + eur(k.auto) + '</td></tr></tfoot></table></div>';
       var chk = Object.keys(p.check || {});
@@ -2856,15 +2892,17 @@ body.shelf-on .shelf {
   function viewRules() {
     var rules = B.data.rules;
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Regeln' }]);
-    h += '<div class="biz-top"><div><h1>Provisionsregeln</h1><p class="sub">Für jede Position gilt die erste passende Regel von oben. „Betrag“ ist bei monatlichen Positionen der Monatsbeitrag. Bei Verträgen mit dem Häkchen „Bestandskunde“ zählen nur die Regeln, die in der Spalte „Bestandskunde“ abgehakt sind.</p></div>' +
+    h += '<div class="biz-top"><div><h1>Provisionsregeln</h1><p class="sub">Für jede Position gilt die erste passende Regel von oben, deren Zeitraum zum Unterschriftsdatum passt („gilt ab“ / „gilt bis“, leer = unbegrenzt). „Betrag“ ist bei monatlichen Positionen der Monatsbeitrag. Bei Verträgen mit dem Häkchen „Bestandskunde“ zählen nur die Regeln, die in der Spalte „Bestandskunde“ abgehakt sind.</p></div>' +
       '<div class="biz-actions"><button type="button" class="btn" data-act="addrule">Regel hinzufügen</button><button type="button" class="btn" data-act="resetrules">Standard wiederherstellen</button></div></div>';
-    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl rules"><thead><tr><th>Bereich</th><th>Position enthält</th><th>Berechnung</th><th class="num">Wert</th><th class="ctr">Bestandskunde</th><th></th></tr></thead><tbody>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl rules"><thead><tr><th>Bereich</th><th>Position enthält</th><th>Berechnung</th><th class="num">Wert</th><th>Gilt ab</th><th>Gilt bis</th><th class="ctr">Bestandskunde</th><th></th></tr></thead><tbody>';
     rules.forEach(function (r, i) {
       var k = 'rule' + i;
       h += '<tr><td><select class="sel" data-key="' + k + '" data-f="sec">' + ['monthly', 'onetime', 'service'].map(function (s) { return '<option value="' + s + '"' + (r.sec === s ? ' selected' : '') + '>' + SEC_NAME[s] + '</option>'; }).join('') + '</select></td>' +
         '<td><input type="text" class="txt" data-key="' + k + '" data-f="match" value="' + esc(r.match || '') + '" placeholder="leer = alle übrigen"></td>' +
         '<td><select class="sel" data-key="' + k + '" data-f="type">' + [['mult', 'Vielfaches des Betrags'], ['fixed', 'Festbetrag'], ['none', 'keine Provision']].map(function (o) { return '<option value="' + o[0] + '"' + (r.type === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></td>' +
         '<td class="num"><input type="text" inputmode="decimal" class="txt num-in" data-key="' + k + '" data-f="value" value="' + esc(r.type === 'none' ? '' : deNum(r.value)) + '"' + (r.type === 'none' ? ' disabled' : '') + ' aria-label="Wert"></td>' +
+        '<td><input type="date" class="txt date-in" data-key="' + k + '" data-f="from" value="' + esc(r.from || '') + '" aria-label="gilt ab"></td>' +
+        '<td><input type="date" class="txt date-in" data-key="' + k + '" data-f="until" value="' + esc(r.until || '') + '" aria-label="gilt bis"></td>' +
         '<td class="ctr"><label class="chk"><input type="checkbox" data-key="' + k + '" data-f="existing"' + (r.existing ? ' checked' : '') + (r.type === 'none' ? ' disabled' : '') + ' aria-label="zählt auch bei Bestandskunden"></label></td>' +
         '<td class="row-btns"><button type="button" class="btn small" data-act="up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="nach oben">↑</button><button type="button" class="btn small" data-act="down" data-i="' + i + '"' + (i === rules.length - 1 ? ' disabled' : '') + ' aria-label="nach unten">↓</button><button type="button" class="btn small danger" data-act="delrule" data-i="' + i + '">Entfernen</button></td></tr>';
     });
@@ -2884,8 +2922,10 @@ body.shelf-on .shelf {
       expandItems(c, kiInfo(c)).forEach(function (it) {
         var key = it.section + '|' + it.name;
         var p = prods.get(key);
-        if (!p) { p = { it: it, n: 0 }; prods.set(key, p); }
+        if (!p) { p = { it: it, n: 0, rules: [] }; prods.set(key, p); }
         p.n++;
+        var rr = ruleFor(it, c.signed);
+        if (p.rules.indexOf(rr) < 0) p.rules.push(rr);
       });
     });
     var arr = Array.from(prods.values()).sort(function (a, b) {
@@ -2895,8 +2935,10 @@ body.shelf-on .shelf {
     if (!arr.length) return h + '<div class="panel pad-in"><p>Sobald unterschriebene Verträge im Ordner liegen, siehst du hier, welche Regel für welche Position gilt.</p></div>';
     h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bereich</th><th>Position</th><th class="num">Verträge</th><th>Regel</th><th class="num">Beispiel</th></tr></thead><tbody>';
     arr.forEach(function (p) {
-      var r = ruleFor(p.it);
-      h += '<tr' + (r ? '' : ' class="flag-row"') + '><td>' + SEC_NAME[p.it.section] + '</td><td class="wrap">' + esc(p.it.name) + '</td><td class="num">' + p.n + '</td><td>' + esc(ruleText(r)) + '</td><td class="num">' + eur(provOf(p.it, r)) + '</td></tr>';
+      var miss = p.rules.indexOf(null) >= 0;
+      h += '<tr' + (miss ? ' class="flag-row"' : '') + '><td>' + SEC_NAME[p.it.section] + '</td><td class="wrap">' + esc(p.it.name) + '</td><td class="num">' + p.n + '</td><td class="wrap">' +
+        p.rules.map(function (r) { return esc(ruleText(r)) + (r ? ruleSpan(r) : ''); }).join('<br>') + '</td><td class="num">' +
+        p.rules.map(function (r) { return eur(provOf(p.it, r)); }).join('<br>') + '</td></tr>';
     });
     return h + '</tbody></table></div></div>';
   }
