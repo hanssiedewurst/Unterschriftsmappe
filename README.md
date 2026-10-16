@@ -93,7 +93,7 @@ Auf dem iPad gibt es diese Liste nicht, Safari erlaubt keinen dauerhaften Ordner
 
 Im Ordnermodus liest die App alle PDFs aus dem Ablageordner für Unterschriebene aus, also auch die vom iPad, sobald sie dort liegen.
 
-**Kunden-Ordner:** In der Seitenleiste unter **Kunden** steht jeder Kunde mit seinen Verträgen: *Kunde › Angebot › Provision & Status / PDF ansehen*. Kunde, Kundennummer, Adresse, Angebotsnummer, Datum, Laufzeit und alle Positionen kommen direkt aus dem Angebots-PDF. Die Kundennummer nimmt die App aus „Kunden Nr.“ im PDF, sonst aus der Zahl vor dem „_“ in der Angebotsnummer (1006213_4216 → 1006213). Verträge mit derselben Kundennummer landen beim selben Kunden. In der Kundenübersicht steht die Kundennummer oben rechts mit einem Knopf **Kopieren**. Passen beide Nummern nicht zusammen, wird der Vertrag mit „prüfen“ markiert.
+**Kunden-Ordner:** In der Seitenleiste unter **Kunden** steht jeder Kunde mit seinen Verträgen: *Kunde › Angebot › Provision & Status / PDF ansehen*. Kunde, Kundennummer, Adresse, Angebotsnummer, Datum, Laufzeit und alle Positionen kommen direkt aus dem Angebots-PDF. Die Kundennummer nimmt die App aus „Kunden Nr.“ im PDF, sonst aus der Zahl vor dem „_“ in der Angebotsnummer (1006213_4216 → 1006213). Verträge mit derselben Kundennummer landen beim selben Kunden. In der Kundenübersicht steht die Kundennummer oben rechts mit einem Knopf **Kopieren**. Wurde keine gefunden, steht dort ein Feld zum Eintragen; über **Ändern** lässt sich eine Nummer auch korrigieren. Die eingetragene Nummer gilt für alle Verträge des Kunden. Passen beide Nummern nicht zusammen, wird der Vertrag mit „prüfen“ markiert.
 
 **Provision:** Der Knopf **Provision** oben öffnet die Übersicht:
 

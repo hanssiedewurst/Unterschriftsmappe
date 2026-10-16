@@ -417,6 +417,8 @@ body.shelf-on .shelf {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
 }
 .copybox .k { font-size: 12.5px; color: var(--muted); }
+.copybox.missing { border-color: var(--flag-edge); background: var(--flag-wash); }
+.copybox .cv-in { width: 150px; font-size: 16px; font-variant-numeric: tabular-nums; }
 .copybox .cv { font-size: 18px; font-weight: 600; letter-spacing: .02em; user-select: all; -webkit-user-select: all; }
 
 /* Organizer */
@@ -588,7 +590,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 10</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 11</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2364,6 +2366,7 @@ body.shelf-on .shelf {
     var ki = kiInfo(c);
     if (ki && ki.assumed) return true;
     if (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo) return true;
+    if (!c.custNo) return true;
     return Object.keys(p.check || {}).some(function (k) { return !p.check[k]; });
   }
 
@@ -2406,7 +2409,8 @@ body.shelf-on .shelf {
       file: f, parsed: parsed, signed: signed, offerNo: parsed.offerNo || '',
       custKey: custNo ? 'K:' + custNo : 'N:' + (cust.name || f.name).toLowerCase(),
       custName: cust.name || '', custNo: custNo, custNoSource: cust.no ? 'pdf' : noFromOffer ? 'offer' : '',
-      noFromOffer: noFromOffer, address: cust.address || [], older: 0
+      noFromOffer: noFromOffer, address: cust.address || [], older: 0,
+      det: { no: custNo, source: cust.no ? 'pdf' : noFromOffer ? 'offer' : '', key: custNo ? 'K:' + custNo : 'N:' + (cust.name || f.name).toLowerCase() }
     };
   }
   async function scanContracts() {
@@ -2428,6 +2432,7 @@ body.shelf-on .shelf {
       var byKey = new Map();
       list.forEach(function (c) { if (!byKey.has(c.key)) byKey.set(c.key, c); else byKey.get(c.key).older++; });
       B.contracts = Array.from(byKey.values());
+      applyManualNumbers();
       customers(); // merges names per customer number
       B.scanned = true;
     } catch (e) {
@@ -2437,6 +2442,31 @@ body.shelf-on .shelf {
     B.scanning = false; B.progress = '';
     if (B.rescan) { B.rescan = false; scanContracts(); return; }
     renderCustomers(); if (S.view === 'biz') renderBiz();
+  }
+  function applyManualNumbers() {
+    B.contracts.forEach(function (c) {
+      var m = B.data && B.data.contracts[c.key];
+      if (m && m.custNo) { c.custNo = m.custNo; c.custNoSource = 'manual'; c.custKey = 'K:' + m.custNo; }
+      else { c.custNo = c.det.no; c.custNoSource = c.det.source; c.custKey = c.det.key; }
+    });
+  }
+  function saveCustomerNo(groupKey, value) {
+    var v = String(value || '').trim().replace(/\s+/g, '');
+    if (v && !/^[A-Za-z0-9._\-\/]{1,20}$/.test(v)) { toast('Bitte nur Ziffern oder Buchstaben eingeben, ohne Leerzeichen.'); return false; }
+    var g = customers().find(function (x) { return x.key === groupKey; });
+    if (!g) return false;
+    g.contracts.forEach(function (c) {
+      var m = meta(c);
+      if (v && v !== c.det.no) m.custNo = v; else delete m.custNo;
+    });
+    saveData();
+    applyManualNumbers();
+    var c0 = g.contracts[0];
+    B.editNo = null;
+    B.view = { kind: 'customer', key: c0.custKey };
+    B.open.add('c:' + c0.custKey);
+    toast(v ? 'Kundennummer ' + v + ' gespeichert.' : 'Eingetragene Kundennummer entfernt.');
+    return true;
   }
   function customers() {
     var map = new Map();
@@ -2644,7 +2674,7 @@ body.shelf-on .shelf {
       '</div></div>';
     h += '<div class="panel"><div class="facts">' +
       fact('Kunde', cname) +
-      fact('Kundennummer', c.custNo ? c.custNo + (c.custNoSource === 'offer' ? ' (aus der Angebotsnummer)' : '') +
+      fact('Kundennummer', c.custNo ? c.custNo + (c.custNoSource === 'offer' ? ' (aus der Angebotsnummer)' : c.custNoSource === 'manual' ? ' (von Hand eingetragen)' : '') +
         (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo ? ' – Achtung: laut Angebotsnummer ' + c.noFromOffer : '') : '–') +
       fact('Adresse', c.address.join(', ') || '–') +
       fact('Angebotsdatum', p.offerDate || '–') +
@@ -2687,8 +2717,14 @@ body.shelf-on .shelf {
     var sum = function (f) { return round2(rows.reduce(function (a, x) { return a + (f(x) || 0); }, 0)); };
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: g.name }]);
     h += '<div class="biz-top"><div><h1>' + esc(g.name) + '</h1>' + (g.address.length ? '<p class="sub">' + esc(g.address.join(', ')) + '</p>' : '') + '</div>' +
-      (g.no ? '<div class="copybox"><span class="k">Kundennummer</span><span class="cv mono" id="custNoValue">' + esc(g.no) + '</span>' +
-        '<button type="button" class="btn small" data-act="copy" data-text="' + esc(g.no) + '">Kopieren</button></div>' : '') + '</div>';
+      (g.no && B.editNo !== g.key
+        ? '<div class="copybox"><span class="k">Kundennummer</span><span class="cv mono" id="custNoValue">' + esc(g.no) + '</span>' +
+          '<button type="button" class="btn small" data-act="copy" data-text="' + esc(g.no) + '">Kopieren</button>' +
+          '<button type="button" class="btn small quiet" data-act="editno" data-key="' + esc(g.key) + '">Ändern</button></div>'
+        : '<div class="copybox edit' + (g.no ? '' : ' missing') + '"><label class="k" for="custNoInput">' + (g.no ? 'Kundennummer' : 'Keine Kundennummer gefunden') + '</label>' +
+          '<input id="custNoInput" class="txt cv-in" type="text" inputmode="numeric" autocomplete="off" value="' + esc(g.no || '') + '" placeholder="z. B. 1006213" data-group="' + esc(g.key) + '">' +
+          '<button type="button" class="btn small primary" data-act="saveno" data-key="' + esc(g.key) + '">Speichern</button>' +
+          (g.no ? '<button type="button" class="btn small quiet" data-act="cancelno">Abbrechen</button>' : '') + '</div>') + '</div>';
     h += '<div class="tiles">' + tile('Verträge', String(rows.length), '') + tile('Provision', eur(sum(function (x) { return x.k.prov; })), '') +
       tile('Auszahlung (Faktor bekannt)', eur(sum(function (x) { return x.k.payout; })), '') + '</div>';
     h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Datum</th><th>Angebot</th><th class="num">Provision</th><th class="num">Faktor</th><th class="num">Auszahlung</th><th>Installiert</th><th>Abgerechnet</th></tr></thead><tbody>';
@@ -2759,6 +2795,13 @@ body.shelf-on .shelf {
     }
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.dataset.act, rules = B.data.rules, idx = Number(b.dataset.i);
+    if (act === 'editno') { B.editNo = b.dataset.key; renderBiz(); var ei = $('#custNoInput'); if (ei) { ei.focus(); ei.select(); } return; }
+    if (act === 'cancelno') { B.editNo = null; renderBiz(); return; }
+    if (act === 'saveno') {
+      var inp = $('#custNoInput');
+      if (inp && saveCustomerNo(b.dataset.key, inp.value)) { renderBiz(); renderCustomers(); }
+      return;
+    }
     if (act === 'copy') {
       var txt = b.dataset.text;
       var done = function () { b.textContent = 'Kopiert ✓'; setTimeout(function () { b.textContent = 'Kopieren'; }, 1800); toast('Kundennummer ' + txt + ' kopiert.'); };
@@ -2838,6 +2881,10 @@ body.shelf-on .shelf {
       if (f === 'factor' && v !== null) m.factor = Math.round(v * 1000) / 1000;
     } else return;
     saveData(); rerender();
+  });
+  bizEl.addEventListener('keydown', function (e) {
+    if (e.target.id === 'custNoInput' && e.key === 'Enter') { e.preventDefault(); var sb = bizEl.querySelector('[data-act="saveno"]'); if (sb) sb.click(); }
+    if (e.target.id === 'custNoInput' && e.key === 'Escape' && B.editNo) { B.editNo = null; renderBiz(); }
   });
   bizEl.addEventListener('input', function (e) {
     var t = e.target;
