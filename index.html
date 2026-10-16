@@ -580,7 +580,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 7</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 8</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2202,7 +2202,7 @@ body.shelf-on .shelf {
     { sec: 'onetime', match: '', type: 'none', value: 0 },
     { sec: 'service', match: '', type: 'none', value: 0 }
   ];
-  var DEFAULT_KI = { tiers: [99, 199, 499], variants: [{ match: 'Einzelkämpfer', price: 99 }] };
+  var DEFAULT_KI = { tiers: [99, 199, 499], variants: [{ match: 'Einzelkämpfer', price: 99 }, { match: 'Betriebe', price: 199 }, { match: 'Mittelstand', price: 499 }] };
   var KI_RE = /^(.*?)\s*(?:&|\+|\bund\b|\binkl\.?)\s*KI[-\s]?Bundle\b/i;
   var SEC_NAME = { monthly: 'Monatlich', onetime: 'Einmalig', service: 'Dienstleistung' };
   var MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -2239,7 +2239,14 @@ body.shelf-on .shelf {
       if (d && typeof d === 'object') {
         if (Array.isArray(d.rules) && d.rules.length) B.data.rules = d.rules;
         if (d.contracts && typeof d.contracts === 'object') B.data.contracts = d.contracts;
-        if (d.ki && Array.isArray(d.ki.tiers) && Array.isArray(d.ki.variants)) B.data.ki = d.ki;
+        if (d.ki && Array.isArray(d.ki.tiers) && Array.isArray(d.ki.variants)) {
+          B.data.ki = d.ki;
+          if (!d.kiVersion || d.kiVersion < 2) {
+            DEFAULT_KI.variants.forEach(function (v) {
+              if (!B.data.ki.variants.some(function (x) { return String(x.match || '').toLowerCase() === v.match.toLowerCase(); })) B.data.ki.variants.push(clone(v));
+            });
+          }
+        }
         if (!d.rulesVersion || d.rulesVersion < 2) {
           // rules saved before the AI bundle existed: add its rule in front of the catch-all
           if (!B.data.rules.some(function (r) { return /ki[-\s]?bundle/i.test(r.match || ''); })) {
@@ -2264,7 +2271,7 @@ body.shelf-on .shelf {
         var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
         var w = await fh.createWritable();
         await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
-                                       rulesVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts }, null, 2));
+                                       rulesVersion: 2, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts }, null, 2));
         await w.close();
       } catch (e) {
         console.warn(e);
@@ -2309,12 +2316,15 @@ body.shelf-on .shelf {
     var m = meta(c), ki = B.data.ki, price = null, source = '', assumed = false;
     if (m.kiPrice) { price = m.kiPrice; source = 'von Hand gewählt'; }
     else {
-      for (var i = 0; i < ki.variants.length && price === null; i++) {
-        var v = ki.variants[i], mt = String(v.match || '').trim().toLowerCase();
-        if (!mt) continue;
-        var hit = items.find(function (it) { return it.name.toLowerCase().indexOf(mt) >= 0; });
-        if (hit) { price = Number(v.price); source = 'erkannt an „' + hit.name + '“'; }
-      }
+      var petra = items.filter(function (it) { return /hallo\s*petra/i.test(it.name) && it !== combo; });
+      [petra, items.filter(function (it) { return it !== combo; })].forEach(function (pool) {
+        for (var i = 0; i < ki.variants.length && price === null; i++) {
+          var v = ki.variants[i], mt = String(v.match || '').trim().toLowerCase();
+          if (!mt) continue;
+          var hit = pool.find(function (it) { return it.name.toLowerCase().indexOf(mt) >= 0; });
+          if (hit) { price = Number(v.price); source = 'erkannt an „' + hit.name + '“'; }
+        }
+      });
     }
     if (price === null) { price = Math.min.apply(null, ki.tiers); source = 'angenommen, Variante nicht erkannt'; assumed = true; }
     var ok = price > 0 && price < combo.total;
