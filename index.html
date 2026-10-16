@@ -32,6 +32,8 @@
   --flag-edge: #d9a400;
   --flag-wash: rgba(246, 198, 35, 0.16);
   --ok: #1b7a49;
+  --ok-wash: rgba(27, 122, 73, 0.12);
+  --danger-wash: rgba(179, 36, 47, 0.1);
   --danger: #b3242f;
   --paper: #ffffff;
   --paper-line: #9aa3b6;
@@ -51,7 +53,7 @@
     --desk: #0f131b; --surface: #182031; --surface-2: #141b29; --ink: #e5e9f2; --muted: #9aa4b8;
     --line: #2b3549; --accent: #8aa2ff; --accent-ink: #0b1124; --accent-soft: #1d2848;
     --flag: #f6c623; --flag-ink: #2b2300; --flag-edge: #f6c623; --flag-wash: rgba(246, 198, 35, 0.2);
-    --ok: #52c792; --danger: #ff6f7a; --scrim: rgba(3, 6, 12, 0.6);
+    --ok: #52c792; --danger: #ff6f7a; --ok-wash: rgba(82, 199, 146, 0.16); --danger-wash: rgba(255, 111, 122, 0.14); --scrim: rgba(3, 6, 12, 0.6);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 30px -12px rgba(0, 0, 0, 0.7);
     color-scheme: dark;
   }
@@ -60,7 +62,7 @@
   --desk: #0f131b; --surface: #182031; --surface-2: #141b29; --ink: #e5e9f2; --muted: #9aa4b8;
   --line: #2b3549; --accent: #8aa2ff; --accent-ink: #0b1124; --accent-soft: #1d2848;
   --flag: #f6c623; --flag-ink: #2b2300; --flag-edge: #f6c623; --flag-wash: rgba(246, 198, 35, 0.2);
-  --ok: #52c792; --danger: #ff6f7a; --scrim: rgba(3, 6, 12, 0.6);
+  --ok: #52c792; --danger: #ff6f7a; --ok-wash: rgba(82, 199, 146, 0.16); --danger-wash: rgba(255, 111, 122, 0.14); --scrim: rgba(3, 6, 12, 0.6);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 30px -12px rgba(0, 0, 0, 0.7);
   color-scheme: dark;
 }
@@ -309,6 +311,98 @@ body.shelf-on .shelf {
 .shelf-foot strong { color: var(--ink); font-weight: 600; }
 .btn.small { min-height: 32px; padding: 0 10px; font-size: 13.5px; }
 
+/* Sidebar tabs and customer tree */
+.shelf-tabs { display: flex; gap: 4px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.shelf-tabs button {
+  flex: 1; border: 0; background: none; padding: 10px 8px; cursor: pointer; touch-action: manipulation;
+  font: 500 14.5px/1.2 var(--f-sans); color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.shelf-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.cust-box { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.tree-wrap { overflow: auto; flex: 1; min-height: 0; padding: 2px 8px 12px; }
+.tree, .tree ul { list-style: none; margin: 0; padding: 0; }
+.tree ul { padding-left: 12px; margin-left: 12px; border-left: 1px solid var(--line); }
+.tree summary {
+  list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px;
+  padding: 7px 8px; border-radius: 7px;
+}
+.tree summary::-webkit-details-marker { display: none; }
+.tree summary::before { content: "›"; color: var(--muted); display: inline-block; width: 8px; transition: transform .15s; }
+.tree details[open] > summary::before { transform: rotate(90deg); }
+.tree summary:hover { background: var(--surface-2); }
+.tree summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.t-name { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.t-meta { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tree .leaf {
+  width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 7px; cursor: pointer;
+  color: var(--accent); font: 500 14px/1.3 var(--f-sans);
+}
+.tree .leaf:hover, .tree .leaf.is-current { background: var(--accent-soft); }
+
+/* Commission views */
+.biz { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.biz-top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 16px; }
+.biz h1 { margin: 0; font-size: 24px; line-height: 1.2; text-wrap: balance; }
+.biz .h2 { margin: 8px 0 0; font-size: 17px; }
+.biz .sub { margin: 4px 0 0; color: var(--muted); max-width: 70ch; }
+.biz-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.crumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13.5px; color: var(--muted); }
+.linkish { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
+.linkish:hover { text-decoration: underline; }
+.muted { color: var(--muted); font-weight: 400; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tile .k { font-size: 12.5px; color: var(--muted); }
+.tile .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile .s { font-size: 12.5px; color: var(--muted); }
+.tile.wait { border-color: var(--flag-edge); background: var(--flag-wash); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+.pad-in { padding: 16px; }
+.pad-in p { margin: 0; }
+.warnbox { border-color: var(--danger); background: var(--danger-wash); }
+.tbl-wrap { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.tbl th, .tbl td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.tbl th { font: 600 11.5px/1.2 var(--f-cond); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); }
+.tbl .num { text-align: right; }
+.tbl .wrap { white-space: normal; min-width: 150px; }
+.tbl .brk { overflow-wrap: anywhere; max-width: 260px; }
+.tbl tr.month td { background: var(--surface-2); font-weight: 600; }
+.tbl tr.dim td { color: var(--muted); }
+.tbl tr.flag-row td { background: var(--flag-wash); }
+.tbl tfoot td { font-weight: 600; border-bottom: 0; }
+.tbl-note { margin: 0; padding: 10px 12px; font-size: 13px; color: var(--ok); border-top: 1px solid var(--line); }
+.tbl-note.bad { color: var(--danger); }
+.factor, .txt, .sel, .fld input, .fld textarea {
+  font: 400 14px/1.3 var(--f-sans); color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px;
+}
+.factor { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
+.factor.out { border-color: var(--danger); }
+.num-in { width: 90px; text-align: right; }
+.rules .txt { width: 100%; min-width: 200px; }
+.row-btns { display: flex; gap: 6px; }
+.chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.chk input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; vertical-align: middle; }
+.pill.wait { background: var(--flag-wash); color: var(--ink); border: 1px solid var(--flag-edge); }
+.pill.warn { background: var(--danger-wash); color: var(--danger); }
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.stat { display: flex; flex-direction: column; gap: 5px; padding: 16px; border-right: 1px solid var(--line); min-width: 0; }
+.stat:last-child { border-right: 0; }
+.stat .k { font-size: 12.5px; color: var(--muted); }
+.stat .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .s { font-size: 12.5px; color: var(--muted); }
+.stat .factor { width: 110px; font-size: 18px; padding: 7px 10px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 20px; padding: 16px; }
+.fact { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fact .k { font-size: 12.5px; color: var(--muted); }
+.fact .v { overflow-wrap: anywhere; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 20px; }
+.fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.fld textarea { resize: vertical; min-height: 70px; }
+
 /* Organizer */
 .org-head { max-width: 980px; margin: 0 auto 16px; color: var(--muted); }
 .org-head p { margin: 0; max-width: 62ch; }
@@ -411,6 +505,7 @@ body.shelf-on .shelf {
     </div>
     <div class="actions">
       <button class="btn" type="button" id="shelfBtn" aria-pressed="false" aria-controls="shelf" hidden>Angebote</button>
+      <button class="btn" type="button" id="provBtn" aria-pressed="false" hidden>Provision</button>
       <label class="btn" for="fileInput" id="openLabel">PDF öffnen</label>
       <input class="vh" type="file" id="fileInput" accept="application/pdf,.pdf" multiple>
       <button class="btn" type="button" id="viewBtn" aria-pressed="false">Seiten ordnen</button>
@@ -443,6 +538,10 @@ body.shelf-on .shelf {
     </div>
     <button class="btn small" type="button" id="shelfRefresh" hidden>Aktualisieren</button>
   </div>
+  <div class="shelf-tabs" id="shelfTabs" role="tablist" hidden>
+    <button type="button" role="tab" data-tab="offers" aria-selected="true">Angebote</button>
+    <button type="button" role="tab" data-tab="customers" aria-selected="false">Kunden</button>
+  </div>
   <div class="shelf-box" id="shelfSetupBox" hidden>
     <p>Wähle einmal die beiden Ordner aus deinem OneDrive. Die App merkt sich die Auswahl auf diesem Rechner.</p>
     <div class="pick"><span class="pick-label">Angebote zum Unterschreiben</span><span class="pick-name" id="pickInName">noch nicht gewählt</span><button class="btn" type="button" id="pickIn">Ordner wählen</button></div>
@@ -462,6 +561,10 @@ body.shelf-on .shelf {
     </div>
     <ul class="shelf-list" id="shelfList"></ul>
   </div>
+  <div class="cust-box" id="custBox" hidden>
+    <div class="shelf-tools"><input type="search" id="custSearch" placeholder="Kunde oder Angebot suchen" aria-label="Kunde oder Angebot suchen" autocomplete="off"></div>
+    <div class="tree-wrap" id="custTree"></div>
+  </div>
   <div class="shelf-foot" id="shelfFoot" hidden>
     <span>Unterschriebene landen in <strong id="shelfOut">–</strong></span>
     <button class="link-btn" type="button" id="shelfSetup">Ordner ändern</button>
@@ -469,7 +572,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 5</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 6</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -481,6 +584,7 @@ body.shelf-on .shelf {
   </div>
   <div class="pages" id="pages"></div>
   <div id="organizer" hidden></div>
+  <div class="biz" id="biz" hidden></div>
 </main>
 </div>
 
@@ -1465,13 +1569,16 @@ body.shelf-on .shelf {
   var lastRemoved = null;
   function setView(v) {
     if (S.view === v) return;
+    var prev = S.view;
     S.view = v;
-    var org = v === 'organize';
-    orgEl.hidden = !org; pagesEl.hidden = org; sampleNote.hidden = org || !S.isSample;
+    var org = v === 'organize', biz = v === 'biz';
+    orgEl.hidden = !org; pagesEl.hidden = org || biz; bizEl.hidden = !biz; sampleNote.hidden = v !== 'pages' || !S.isSample;
     viewBtn.setAttribute('aria-pressed', String(org));
     viewBtn.textContent = org ? 'Fertig' : 'Seiten ordnen';
     if (org) { setPlacing(false); renderOrganizer(); }
-    else { orgEl.textContent = ''; rebuild(); }
+    else if (biz) { setPlacing(false); orgEl.textContent = ''; }
+    else { orgEl.textContent = ''; if (prev !== 'biz' || !pagesEl.children.length) rebuild(); else layout(); }
+    if (!biz) renderCustomers();
     updateChrome();
   }
   function renderOrganizer() {
@@ -1556,13 +1663,14 @@ body.shelf-on .shelf {
   /* ---------- chrome ---------- */
   function updateChrome() {
     var has = S.pages.length > 0, used = docsInUse();
-    emptyEl.hidden = has;
+    emptyEl.hidden = has || S.view === 'biz';
     sampleNote.hidden = !S.isSample || S.view !== 'pages' || !has;
     docTitle.textContent = !has ? 'Kein Dokument' : S.isSample ? 'Beispielvertrag'
       : used.length === 1 ? used[0].name : used.length + ' Dateien zusammengefügt';
     openLabel.textContent = (S.isSample || !has) ? 'PDF öffnen' : 'PDF anhängen';
     clearBtn.hidden = S.isSample || !has;
-    saveBtn.disabled = !has;
+    saveBtn.disabled = !has || S.view === 'biz';
+    provBtn.setAttribute('aria-pressed', String(S.view === 'biz'));
     addBtn.disabled = !has || S.view !== 'pages';
     viewBtn.disabled = !has && S.view !== 'organize';
     var total = S.zones.length, signed = S.zones.filter(function (z) { return z.sig; }).length, open = total - signed;
@@ -1807,6 +1915,7 @@ body.shelf-on .shelf {
   async function fsInit() {
     if (!FS_OK) return;
     shelfBtn.hidden = false;
+    provBtn.hidden = false;
     setBarH();
     try { F.inDir = await kvGet('inDir'); F.outDir = await kvGet('outDir'); } catch (e) { console.warn(e); }
     if (!F.inDir || !F.outDir) { F.state = 'setup'; renderShelf(); return; }
@@ -1867,6 +1976,7 @@ body.shelf-on .shelf {
       else toast('Der OneDrive-Ordner konnte nicht gelesen werden (' + e.message + ').', { ms: 6000 });
     }
     F.loading = false; renderShelf();
+    if (F.state === 'ready') scanContracts();
   }
 
   function fmtDate(ms) {
@@ -1876,10 +1986,12 @@ body.shelf-on .shelf {
   function renderShelf() {
     $('#shelfSetupBox').hidden = F.state !== 'setup';
     $('#shelfPromptBox').hidden = F.state !== 'prompt';
-    $('#shelfReadyBox').hidden = F.state !== 'ready';
+    $('#shelfReadyBox').hidden = F.state !== 'ready' || B.tab !== 'offers';
+    $('#shelfTabs').hidden = F.state !== 'ready';
+    $('#custBox').hidden = F.state !== 'ready' || B.tab !== 'customers';
     $('#shelfFoot').hidden = F.state !== 'ready';
     $('#shelfRefresh').hidden = F.state !== 'ready';
-    $('#shelfTitle').textContent = F.state === 'setup' ? 'Einrichten' : (F.inDir ? F.inDir.name : 'Angebote');
+    $('#shelfTitle').textContent = F.state === 'setup' ? 'Einrichten' : (F.state === 'ready' && B.tab === 'customers') ? 'Kunden' : (F.inDir ? F.inDir.name : 'Angebote');
     $('#shelfOut').textContent = F.outDir ? F.outDir.name : '–';
     $('#pickInName').textContent = F.inDir ? F.inDir.name : 'noch nicht gewählt';
     $('#pickOutName').textContent = F.outDir ? F.outDir.name : 'noch nicht gewählt';
@@ -1958,6 +2070,653 @@ body.shelf-on .shelf {
       renderShelf();
     });
   });
+
+  /* ---------- reading offers (customer, offer, price tables) ---------- */
+  function fixEnc(s) {
+    return String(s).replace(/(%[0-9A-Fa-f]{2})+/g, function (m) { try { return decodeURIComponent(m); } catch (e) { return m; } });
+  }
+  function euro(s) {
+    var m = /^-?[\d.]+,\d{2}$/.exec(String(s).replace(/\s*€\s*$/, '').trim());
+    return m ? Number(m[0].replace(/\./g, '').replace(',', '.')) : null;
+  }
+  async function pageLines(page) {
+    var tc = await page.getTextContent();
+    var items = tc.items.filter(function (it) { return it.str && it.str.trim() && it.transform; })
+      .map(function (it) { return { s: it.str.trim(), x: it.transform[4], y: it.transform[5], w: it.width || 0 }; })
+      .sort(function (a, b) { return (b.y - a.y) || (a.x - b.x); });
+    var lines = [];
+    items.forEach(function (it) {
+      var l = lines.length ? lines[lines.length - 1] : null;
+      if (l && Math.abs(l.y - it.y) <= 2.5) l.items.push(it); else lines.push({ y: it.y, items: [it] });
+    });
+    lines.forEach(function (l) {
+      l.items.sort(function (a, b) { return a.x - b.x; });
+      l.text = l.items.map(function (i) { return i.s; }).join(' ');
+    });
+    return lines;
+  }
+  var SECTION = [
+    [/^leistungsbestandteile\b/i, 'monthly'],
+    [/^einmalige investitionen\b/i, 'onetime'],
+    [/^dienstleistungen\b/i, 'service']
+  ];
+  async function parseOffer(pdf) {
+    var r = { customer: { name: '', no: '', address: [] }, offerNo: '', offerDate: '', term: '',
+              items: [], totals: {}, pagesRead: 0 };
+    var sec = null, last = null, lastY = 0, done = { monthly: false, onetime: false, service: false };
+    var maxPages = Math.min(pdf.numPages, 10);
+    for (var n = 1; n <= maxPages; n++) {
+      var lines = await pageLines(await pdf.getPage(n));
+      r.pagesRead = n;
+      lines.forEach(function (l, i) {
+        var t = l.text, m;
+        if (!r.offerNo && (m = /(?:abo)?angebot(?:s-?nr\.?)?\s*:?\s+([A-Za-z0-9][\w\-\/.]*\d[\w\-\/.]*)/i.exec(t)) && !/vom\s/i.test(t)) r.offerNo = m[1];
+        if (!r.customer.no && (m = /(?:kunden\s*-?\s*nr\.?|kd\.?-?\s*nr\.?)\s*:?\s*(\d{3,})/i.exec(t))) r.customer.no = m[1];
+        if (!r.offerDate && (m = /\bdatum\s*:?\s*(\d{1,2}\.\d{1,2}\.\d{4})/i.exec(t))) r.offerDate = m[1];
+        if (!r.offerDate2 && (m = /angebot\s+vom\s+(\d{1,2}\.\d{1,2}\.\d{4})/i.exec(t))) r.offerDate2 = m[1];
+        if (!r.term && (m = /laufzeit[^\d]{0,30}?(\d+\s*monate)/i.exec(t))) r.term = m[1];
+        if (/^-?\s*und\s*-?$/i.test(t) && !r.customer.name && lines[i + 1]) {
+          r.customer.name = fixEnc(lines[i + 1].text);
+          for (var k = i + 2; k < Math.min(lines.length, i + 8); k++) {
+            var a = lines[k].text;
+            if (/^nachfolgend|^germany$|^deutschland$/i.test(a)) break;
+            if (/kd\.?-?\s*nr|kunden\s*-?\s*nr/i.test(a)) continue;
+            r.customer.address.push(fixEnc(a));
+          }
+        }
+        // price tables
+        for (var s = 0; s < SECTION.length; s++) {
+          if (SECTION[s][0].test(t)) { sec = SECTION[s][1]; last = null; return; }
+        }
+        if (!sec) return;
+        var amounts = [], qty = null, nameParts = [];
+        l.items.forEach(function (it) {
+          var e = euro(it.s);
+          if (e !== null && /€|\d,\d{2}$/.test(it.s) && /€/.test(it.s)) { amounts.push(e); return; }
+          var q = /^(\d+(?:,\d+)?)\s*(stk\.?|stück|x)?$/i.exec(it.s);
+          if (q && !amounts.length && nameParts.length) { qty = Number(q[1].replace(',', '.')); return; }
+          if (!amounts.length) nameParts.push(it.s);
+        });
+        var name = nameParts.join(' ').trim();
+        if (/^gesamt(preis|summe|betrag)/i.test(name)) {
+          if (amounts.length) r.totals[sec] = amounts[amounts.length - 1];
+          done[sec] = true; sec = null; last = null; return;
+        }
+        if (/^menge$|einzelpreis|gesamtpreis|^\(zzgl/i.test(t) && !amounts.length) return;
+        if (amounts.length && name) {
+          last = { section: sec, name: fixEnc(name), qty: qty === null ? 1 : qty, unit: amounts[0],
+                   total: amounts.length > 1 ? amounts[amounts.length - 1] : (qty === null ? amounts[0] : 0),
+                   page: n };
+          r.items.push(last); lastY = l.y;
+        } else if (!amounts.length && name && last && Math.abs(lastY - l.y) < 12 && l.items[0].x <= last.x0 + 4) {
+          last.name += ' ' + fixEnc(name); lastY = l.y; // wrapped product name
+        } else if (!amounts.length && name) {
+          last = null; // group heading like "TAIFUN+"
+        }
+        if (last && last.x0 === undefined) last.x0 = l.items[0].x;
+      });
+      if (done.monthly && (done.onetime || done.service) && n >= 5 && r.customer.name) break;
+    }
+    // fallback for the customer name: address block on page 1
+    if (!r.customer.name) {
+      var p1 = await pageLines(await pdf.getPage(1));
+      var anchor = p1.findIndex(function (l) { return /angebot|datum/i.test(l.text); });
+      for (var j = 0; j < anchor; j++) {
+        if (p1[j].y > 600 && !/gmbh\s*\|/i.test(p1[j].text)) { r.customer.name = fixEnc(p1[j].text); break; }
+      }
+    }
+    if (!r.offerDate && r.offerDate2) r.offerDate = r.offerDate2;
+    var sum = function (secName) {
+      return r.items.filter(function (x) { return x.section === secName; }).reduce(function (a, x) { return a + x.total; }, 0);
+    };
+    r.check = {};
+    ['monthly', 'onetime', 'service'].forEach(function (k) {
+      if (r.totals[k] !== undefined) r.check[k] = Math.abs(sum(k) - r.totals[k]) < 0.02;
+    });
+    r.ok = r.items.some(function (x) { return x.section === 'monthly'; });
+    return r;
+  }
+
+  /* ---------- customers, contracts and commission (PC folder mode) ---------- */
+  var DATA_FILE = '_Unterschriftenmappe-Daten.json';
+  var PARSER_VERSION = 2;
+  var DEFAULT_RULES = [
+    { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
+    { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
+    { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 395 },
+    { sec: 'monthly', match: 'PersonalManager Grundgebühr', type: 'fixed', value: 395 },
+    { sec: 'monthly', match: '', type: 'mult', value: 6 },
+    { sec: 'onetime', match: '', type: 'none', value: 0 },
+    { sec: 'service', match: '', type: 'none', value: 0 }
+  ];
+  var SEC_NAME = { monthly: 'Monatlich', onetime: 'Einmalig', service: 'Dienstleistung' };
+  var MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+  var B = { data: null, dataOk: false, contracts: [], scanning: false, rescan: false, scanned: false, progress: '',
+            view: { kind: 'overview' }, year: null, tab: 'offers', saveT: 0, q: '', open: new Set() };
+  var bizEl = $('#biz'), provBtn = $('#provBtn');
+  var EUR = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' });
+
+  function eur(n) { return n === null || n === undefined || isNaN(n) ? '–' : EUR.format(n); }
+  function round2(n) { return Math.round(n * 100) / 100; }
+  function deNum(n) { return String(n).replace('.', ','); }
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function parseNum(v) {
+    var t = String(v).trim().replace(/\s|€/g, '');
+    if (!t) return null;
+    if (/,/.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+    var n = Number(t);
+    return isNaN(n) ? NaN : n;
+  }
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+
+  /* data file in the OneDrive folder */
+  async function loadData() {
+    B.data = { rules: clone(DEFAULT_RULES), contracts: {} };
+    B.dataOk = true;
+    try {
+      var fh = await F.outDir.getFileHandle(DATA_FILE);
+      var d = JSON.parse(await (await fh.getFile()).text());
+      if (d && typeof d === 'object') {
+        if (Array.isArray(d.rules) && d.rules.length) B.data.rules = d.rules;
+        if (d.contracts && typeof d.contracts === 'object') B.data.contracts = d.contracts;
+      }
+    } catch (e) {
+      if (e && e.name === 'NotFoundError') return;
+      if (e instanceof SyntaxError) {
+        B.dataOk = false;
+        toast('Die Datei „' + DATA_FILE + '“ im Ablageordner ist beschädigt. Änderungen werden erst wieder gespeichert, wenn sie repariert oder gelöscht ist.', { ms: 10000 });
+      } else console.warn(e);
+    }
+  }
+  function saveData() {
+    clearTimeout(B.saveT);
+    B.saveT = setTimeout(async function () {
+      if (!B.dataOk || !F.outDir) return;
+      try {
+        var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
+        var w = await fh.createWritable();
+        await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
+                                       rules: B.data.rules, contracts: B.data.contracts }, null, 2));
+        await w.close();
+      } catch (e) {
+        console.warn(e);
+        toast('Die Änderung konnte nicht im OneDrive-Ordner gespeichert werden (' + e.message + ').', { ms: 6000 });
+      }
+    }, 400);
+  }
+  function meta(c) {
+    var m = B.data.contracts[c.key];
+    if (!m) m = B.data.contracts[c.key] = { factor: null, installed: false, billed: false, provOverride: null, note: '' };
+    return m;
+  }
+
+  /* commission rules */
+  function ruleFor(item) {
+    var name = item.name.toLowerCase();
+    var rules = B.data.rules;
+    for (var i = 0; i < rules.length; i++) {
+      var r = rules[i];
+      if (r.sec !== item.section) continue;
+      var mt = String(r.match || '').trim().toLowerCase();
+      if (!mt || name.indexOf(mt) >= 0) return r;
+    }
+    return null;
+  }
+  function provOf(item, r) {
+    if (!r || r.type === 'none') return 0;
+    if (r.type === 'fixed') return Number(r.value) || 0;
+    if (r.type === 'mult') return round2((Number(r.value) || 0) * item.total);
+    return 0;
+  }
+  function ruleText(r) {
+    if (!r) return 'keine passende Regel';
+    if (r.type === 'none') return 'keine Provision';
+    if (r.type === 'fixed') return 'Festbetrag ' + eur(Number(r.value) || 0);
+    return deNum(Number(r.value) || 0) + ' × Betrag';
+  }
+  function calc(c) {
+    var lines = (c.parsed.items || []).map(function (it) { var r = ruleFor(it); return { item: it, rule: r, prov: provOf(it, r) }; });
+    var auto = round2(lines.reduce(function (a, l) { return a + l.prov; }, 0));
+    var m = meta(c);
+    var prov = m.provOverride !== null && m.provOverride !== undefined ? m.provOverride : auto;
+    var payout = m.factor !== null && m.factor !== undefined ? round2(prov * m.factor) : null;
+    return { lines: lines, auto: auto, prov: prov, payout: payout, m: m };
+  }
+  function needsCheck(c) {
+    var p = c.parsed;
+    if (!p.ok) return true;
+    return Object.keys(p.check || {}).some(function (k) { return !p.check[k]; });
+  }
+
+  /* reading the signed contracts */
+  async function walkSigned(dir, path, depth, out) {
+    for await (var pair of dir.entries()) {
+      var name = pair[0], h = pair[1];
+      if (h.kind === 'file' && /\.pdf$/i.test(name)) {
+        var file = await h.getFile();
+        out.push({ name: name, path: path, handle: h, size: file.size, mtime: file.lastModified, file: file });
+      } else if (h.kind === 'directory' && depth < 2) {
+        await walkSigned(h, path ? path + ' › ' + name : name, depth + 1, out);
+      }
+    }
+  }
+  async function getParsed(f) {
+    var ck = 'parse:' + PARSER_VERSION + ':' + f.path + '/' + f.name + '|' + f.size + '|' + f.mtime;
+    try { var hit = await kvGet(ck); if (hit) return hit; } catch (e) {}
+    var parsed;
+    try {
+      var bytes = new Uint8Array(await f.file.arrayBuffer());
+      var pdf = await pdfjsLib.getDocument({ data: bytes, isEvalSupported: false }).promise;
+      try { parsed = await parseOffer(pdf); } finally { try { pdf.destroy(); } catch (e) {} }
+    } catch (e) {
+      parsed = { error: String((e && e.message) || e), items: [], customer: { name: '', no: '', address: [] }, offerNo: '', ok: false, check: {}, totals: {} };
+    }
+    try { await kvSet(ck, parsed); } catch (e) {}
+    return parsed;
+  }
+  function makeContract(f, parsed) {
+    var m = /_unterschrieben_(\d{4})-(\d{2})-(\d{2})/.exec(f.name);
+    var signed = m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : f.mtime;
+    var cust = parsed.customer || {};
+    return {
+      key: parsed.offerNo ? 'A:' + parsed.offerNo : 'F:' + f.path + '/' + f.name,
+      file: f, parsed: parsed, signed: signed, offerNo: parsed.offerNo || '',
+      custKey: cust.no ? 'K:' + cust.no : 'N:' + (cust.name || f.name).toLowerCase(),
+      custName: cust.name || 'Kunde nicht erkannt', custNo: cust.no || '', address: cust.address || [], older: 0
+    };
+  }
+  async function scanContracts() {
+    if (F.state !== 'ready') return;
+    if (B.scanning) { B.rescan = true; return; }
+    B.scanning = true; B.progress = '';
+    renderCustomers(); if (S.view === 'biz') renderBiz();
+    try {
+      if (!B.data) await loadData();
+      var files = [];
+      await walkSigned(F.outDir, '', 0, files);
+      var list = [];
+      for (var i = 0; i < files.length; i++) {
+        B.progress = (i + 1) + ' von ' + files.length;
+        if (i % 3 === 0) renderCustomers();
+        list.push(makeContract(files[i], await getParsed(files[i])));
+      }
+      list.sort(function (a, b) { return (b.signed - a.signed) || (b.file.mtime - a.file.mtime); });
+      var byKey = new Map();
+      list.forEach(function (c) { if (!byKey.has(c.key)) byKey.set(c.key, c); else byKey.get(c.key).older++; });
+      B.contracts = Array.from(byKey.values());
+      B.scanned = true;
+    } catch (e) {
+      console.warn(e);
+      toast('Die unterschriebenen Verträge konnten nicht gelesen werden (' + e.message + ').', { ms: 6000 });
+    }
+    B.scanning = false; B.progress = '';
+    if (B.rescan) { B.rescan = false; scanContracts(); return; }
+    renderCustomers(); if (S.view === 'biz') renderBiz();
+  }
+  function customers() {
+    var map = new Map();
+    B.contracts.forEach(function (c) {
+      var g = map.get(c.custKey);
+      if (!g) { g = { key: c.custKey, name: c.custName, no: c.custNo, address: c.address, contracts: [] }; map.set(c.custKey, g); }
+      g.contracts.push(c);
+    });
+    return Array.from(map.values()).sort(function (a, b) { return a.name.localeCompare(b.name, 'de'); });
+  }
+
+  /* sidebar: customer tree */
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function isCurrent(kind, key) { return S.view === 'biz' && B.view.kind === kind && B.view.key === key; }
+  function leaf(label, onClick, current) {
+    var li = el('li'), b = el('button', 'leaf' + (current ? ' is-current' : ''), label);
+    b.type = 'button'; b.addEventListener('click', onClick); li.appendChild(b); return li;
+  }
+  function details(key, summaryHtml, forceOpen) {
+    var d = el('details');
+    d.open = forceOpen || B.open.has(key);
+    d.addEventListener('toggle', function () { if (d.open) B.open.add(key); else B.open.delete(key); });
+    var s = el('summary'); s.innerHTML = summaryHtml; d.appendChild(s);
+    return d;
+  }
+  function renderCustomers() {
+    var box = $('#custTree'); if (!box) return;
+    box.textContent = '';
+    if (B.scanning && !B.contracts.length) { box.appendChild(el('p', 'si-empty', 'Verträge werden gelesen … ' + B.progress)); return; }
+    if (!B.contracts.length) {
+      box.appendChild(el('p', 'si-empty', 'Im Ordner „' + (F.outDir ? F.outDir.name : '') + '“ liegen noch keine unterschriebenen Verträge.'));
+      return;
+    }
+    var q = B.q.trim().toLowerCase();
+    var ul = el('ul', 'tree');
+    customers().forEach(function (g) {
+      if (q && (g.name + ' ' + g.no + ' ' + g.contracts.map(function (c) { return c.offerNo; }).join(' ')).toLowerCase().indexOf(q) < 0) return;
+      var li = el('li');
+      var d = details('c:' + g.key, '<span class="t-name">' + esc(g.name) + '</span><span class="t-meta">' + g.contracts.length + '</span>', !!q);
+      var inner = el('ul');
+      inner.appendChild(leaf('Kundenübersicht', function () { openBiz({ kind: 'customer', key: g.key }); }, isCurrent('customer', g.key)));
+      g.contracts.forEach(function (c) {
+        var cli = el('li');
+        var cd = details('v:' + c.key, '<span class="t-name">' + esc(c.offerNo ? 'Angebot ' + c.offerNo : c.file.name) + '</span><span class="t-meta">' + fmtDate(c.signed) + '</span>');
+        var cu = el('ul');
+        cu.appendChild(leaf('Provision & Status', function () { openBiz({ kind: 'contract', key: c.key }); }, isCurrent('contract', c.key)));
+        cu.appendChild(leaf('PDF ansehen', function () { openEntry({ handle: c.file.handle, name: c.file.name }); }));
+        cd.appendChild(cu); cli.appendChild(cd); inner.appendChild(cli);
+      });
+      d.appendChild(inner); li.appendChild(d); ul.appendChild(li);
+    });
+    if (!ul.children.length) box.appendChild(el('p', 'si-empty', 'Kein Kunde gefunden.'));
+    else box.appendChild(ul);
+    if (B.scanning) box.appendChild(el('p', 'si-empty', 'Wird aktualisiert … ' + B.progress));
+  }
+  function setTab(tab) {
+    B.tab = tab;
+    document.querySelectorAll('#shelfTabs [data-tab]').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === tab)); });
+    renderShelf();
+    if (tab === 'customers') { renderCustomers(); if (!B.scanned) scanContracts(); }
+  }
+
+  /* main area */
+  function openBiz(view) {
+    B.view = view;
+    if (view.kind === 'contract' || view.kind === 'customer') {
+      var c = B.contracts.find(function (x) { return x.key === view.key || x.custKey === view.key; });
+      if (c) { B.open.add('c:' + c.custKey); if (view.kind === 'contract') B.open.add('v:' + c.key); }
+    }
+    if (narrow()) showShelf(false);
+    setView('biz');
+    renderBiz();
+    renderCustomers();
+    window.scrollTo(0, 0);
+  }
+  function crumbs(parts) {
+    return '<nav class="crumbs" aria-label="Pfad">' + parts.map(function (p) {
+      return p.go ? '<button type="button" class="linkish" data-go="' + esc(p.go) + '">' + esc(p.label) + '</button>' : '<span>' + esc(p.label) + '</span>';
+    }).join('<span aria-hidden="true">›</span>') + '</nav>';
+  }
+  function statusPills(c, k) {
+    var out = [];
+    if (k.m.factor === null || k.m.factor === undefined) out.push('<span class="pill wait">Faktor offen</span>');
+    if (needsCheck(c)) out.push('<span class="pill warn">prüfen</span>');
+    return out.join(' ');
+  }
+  function renderBiz() {
+    if (S.view !== 'biz') return;
+    var ae = document.activeElement, foc = ae && ae.dataset && ae.dataset.key ? { key: ae.dataset.key, f: ae.dataset.f } : null;
+    var html;
+    if (F.state !== 'ready') {
+      html = '<div class="biz-top"><h1>Provision</h1></div><div class="panel pad-in"><p>Richte zuerst unter <strong>Angebote</strong> die beiden OneDrive-Ordner ein. Die Übersicht liest die Verträge aus dem Ordner für unterschriebene PDFs.</p></div>';
+    } else if (!B.data || (!B.scanned && B.scanning)) {
+      html = '<div class="biz-top"><h1>Provision</h1></div><div class="panel pad-in"><p>Verträge werden gelesen … ' + esc(B.progress) + '</p></div>';
+      if (!B.scanned && !B.scanning) scanContracts();
+    } else if (B.view.kind === 'contract') html = viewContract();
+    else if (B.view.kind === 'customer') html = viewCustomer();
+    else if (B.view.kind === 'rules') html = viewRules();
+    else html = viewOverview();
+    bizEl.innerHTML = html;
+    if (foc) {
+      var t = bizEl.querySelector('[data-key="' + CSS.escape(foc.key) + '"]' + (foc.f ? '[data-f="' + foc.f + '"]' : ''));
+      if (t) t.focus();
+    }
+  }
+
+  function viewOverview() {
+    var years = Array.from(new Set(B.contracts.map(function (c) { return new Date(c.signed).getFullYear(); }))).sort(function (a, b) { return b - a; });
+    if (!years.length) years = [new Date().getFullYear()];
+    if (!B.year || years.indexOf(B.year) < 0) B.year = years[0];
+    var list = B.contracts.filter(function (c) { return new Date(c.signed).getFullYear() === B.year; })
+      .sort(function (a, b) { return b.signed - a.signed; })
+      .map(function (c) { return { c: c, k: calc(c) }; });
+    var sum = function (arr, f) { return round2(arr.reduce(function (a, x) { return a + (f(x) || 0); }, 0)); };
+    var withF = list.filter(function (x) { return x.k.payout !== null; });
+    var noF = list.filter(function (x) { return x.k.payout === null; });
+    var notBilled = list.filter(function (x) { return !x.k.m.billed; });
+    var h = '<div class="biz-top"><div><h1>Provision ' + B.year + '</h1><p class="sub">Gezählt ab Unterschrift. Auszahlung = Provision × Faktor.</p></div>' +
+      '<div class="biz-actions">' +
+      (years.length > 1 ? '<label class="sr" for="yearSel">Jahr</label><select id="yearSel" class="sel">' + years.map(function (y) { return '<option' + (y === B.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' : '') +
+      '<button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">Als CSV exportieren</button></div></div>';
+    h += '<div class="tiles">' +
+      tile('Provision', eur(sum(list, function (x) { return x.k.prov; })), list.length + (list.length === 1 ? ' Vertrag' : ' Verträge')) +
+      tile('Auszahlung (Faktor bekannt)', eur(sum(withF, function (x) { return x.k.payout; })), withF.length + ' mit Faktor') +
+      tile('Faktor offen', noF.length + (noF.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(noF, function (x) { return x.k.prov; })) + ' Provision', noF.length ? 'wait' : '') +
+      tile('Noch nicht abgerechnet', notBilled.length + (notBilled.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(notBilled, function (x) { return x.k.payout !== null ? x.k.payout : x.k.prov; })) + ' offen') +
+      '</div>';
+    if (!list.length) return h + '<div class="panel pad-in"><p>In diesem Jahr gibt es noch keine unterschriebenen Verträge.</p></div>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr>' +
+      '<th>Datum</th><th>Kunde</th><th>Angebot</th><th class="num">Provision</th><th class="num">Faktor</th><th class="num">Auszahlung</th><th>Installiert</th><th>Abgerechnet</th>' +
+      '</tr></thead><tbody>';
+    var groups = [];
+    list.forEach(function (x) {
+      var d = new Date(x.c.signed), key = d.getFullYear() * 12 + d.getMonth();
+      var g = groups[groups.length - 1];
+      if (!g || g.key !== key) { g = { key: key, label: MONTHS[d.getMonth()] + ' ' + d.getFullYear(), rows: [] }; groups.push(g); }
+      g.rows.push(x);
+    });
+    groups.forEach(function (g) {
+      var p = sum(g.rows, function (x) { return x.k.prov; }), a = sum(g.rows, function (x) { return x.k.payout; });
+      var open = g.rows.filter(function (x) { return x.k.payout === null; }).length;
+      h += '<tr class="month"><td colspan="3">' + esc(g.label) + '</td><td class="num">' + eur(p) + '</td><td></td><td class="num">' + eur(a) + (open ? ' <span class="muted">+ ' + open + ' offen</span>' : '') + '</td><td colspan="2"></td></tr>';
+      g.rows.forEach(function (x) { h += contractRow(x.c, x.k); });
+    });
+    return h + '</tbody></table></div></div>';
+  }
+  function shortLabel(c) {
+    if (c.offerNo) return c.offerNo;
+    var n = c.file.name.replace(/\.pdf$/i, '').replace(/_unterschrieben_\d{4}-\d{2}-\d{2}.*$/, '');
+    return n.length > 40 ? n.slice(0, 38) + '…' : n;
+  }
+  function tile(k, v, s, cls) {
+    return '<div class="tile' + (cls ? ' ' + cls : '') + '"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="s">' + esc(s) + '</span></div>';
+  }
+  function factorInput(c, m) {
+    var f = m.factor, out = f !== null && f !== undefined && (f < 0.6 || f > 1.2);
+    return '<input class="factor' + (out ? ' out' : '') + '" type="text" inputmode="decimal" data-key="' + esc(c.key) + '" data-f="factor" value="' + esc(f === null || f === undefined ? '' : deNum(f)) + '" placeholder="0,6–1,2" aria-label="Faktor für ' + esc(c.offerNo || c.file.name) + '">';
+  }
+  function check(c, m, f, label) {
+    return '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="' + f + '"' + (m[f] ? ' checked' : '') + '><span class="sr">' + label + '</span></label>';
+  }
+  function contractRow(c, k) {
+    return '<tr><td>' + fmtDate(c.signed) + '</td>' +
+      '<td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(c.custKey) + '">' + esc(c.custName) + '</button></td>' +
+      '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> ' + statusPills(c, k) + '</td>' +
+      '<td class="num">' + eur(k.prov) + (k.m.provOverride !== null && k.m.provOverride !== undefined ? ' <span class="muted" title="manuell">✎</span>' : '') + '</td>' +
+      '<td class="num">' + factorInput(c, k.m) + '</td>' +
+      '<td class="num">' + eur(k.payout) + '</td>' +
+      '<td>' + check(c, k.m, 'installed', 'Installiert') + '</td>' +
+      '<td>' + check(c, k.m, 'billed', 'Abgerechnet') + '</td></tr>';
+  }
+
+  function viewContract() {
+    var c = B.contracts.find(function (x) { return x.key === B.view.key; });
+    if (!c) return '<div class="panel pad-in"><p>Dieser Vertrag ist nicht mehr im Ordner.</p></div>';
+    var k = calc(c), p = c.parsed;
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: c.custName, go: 'customer:' + c.custKey }, { label: c.offerNo ? 'Angebot ' + c.offerNo : c.file.name }]);
+    h += '<div class="biz-top"><div><h1>' + esc(c.offerNo ? 'Angebot ' + c.offerNo : c.file.name) + '</h1><p class="sub">' + esc(c.custName) + '</p></div>' +
+      '<div class="biz-actions"><button type="button" class="btn" data-act="pdf" data-key="' + esc(c.key) + '">PDF ansehen</button></div></div>';
+    if (p.error) h += '<div class="panel pad-in warnbox"><p>Das PDF konnte nicht gelesen werden (' + esc(p.error) + '). Trage die Provision bei Bedarf manuell ein.</p></div>';
+    else if (!p.ok) h += '<div class="panel pad-in warnbox"><p>In diesem PDF wurde keine Preistabelle gefunden. Trage die Provision bei Bedarf manuell ein.</p></div>';
+    h += '<div class="panel"><div class="status-grid">' +
+      '<div class="stat"><span class="k">Provision</span><span class="v">' + eur(k.prov) + '</span>' + (k.m.provOverride !== null && k.m.provOverride !== undefined ? '<span class="s">manuell, berechnet wären ' + eur(k.auto) + '</span>' : '<span class="s">nach Regeln berechnet</span>') + '</div>' +
+      '<div class="stat"><label class="k" for="f-' + esc(c.key) + '">Faktor</label>' + factorInput(c, k.m).replace('<input ', '<input id="f-' + esc(c.key) + '" ') + '<span class="s">meist 0,6 bis 1,2</span></div>' +
+      '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span></div>' +
+      '<div class="stat"><span class="k">Status</span>' +
+        '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="installed"' + (k.m.installed ? ' checked' : '') + '> Installiert' + (k.m.installedAt ? ' <span class="muted">' + fmtDate(k.m.installedAt) + '</span>' : '') + '</label>' +
+        '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="billed"' + (k.m.billed ? ' checked' : '') + '> Abgerechnet' + (k.m.billedAt ? ' <span class="muted">' + fmtDate(k.m.billedAt) + '</span>' : '') + '</label></div>' +
+      '</div></div>';
+    h += '<div class="panel"><div class="facts">' +
+      fact('Kunde', c.custName + (c.custNo ? ' (Nr. ' + c.custNo + ')' : '')) +
+      fact('Adresse', c.address.join(', ') || '–') +
+      fact('Angebotsdatum', p.offerDate || '–') +
+      fact('Unterschrieben', fmtDate(c.signed)) +
+      fact('Laufzeit', p.term || '–') +
+      fact('Datei', (c.file.path ? c.file.path + ' › ' : '') + c.file.name + (c.older ? ' (dazu ' + c.older + ' ältere Fassung' + (c.older > 1 ? 'en' : '') + ')' : '')) +
+      '</div></div>';
+    if (p.items && p.items.length) {
+      h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bereich</th><th>Position</th><th class="num">Menge</th><th class="num">Betrag</th><th>Regel</th><th class="num">Provision</th></tr></thead><tbody>';
+      k.lines.forEach(function (l) {
+        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + esc(ruleText(l.rule)) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
+      });
+      h += '</tbody><tfoot><tr><td colspan="5">Provision laut Regeln</td><td class="num">' + eur(k.auto) + '</td></tr></tfoot></table></div>';
+      var chk = Object.keys(p.check || {});
+      if (chk.length) {
+        var bad = chk.filter(function (x) { return !p.check[x]; });
+        h += '<p class="tbl-note' + (bad.length ? ' bad' : '') + '">' + (bad.length
+          ? 'Achtung: Die gelesenen Positionen ergeben bei ' + bad.map(function (x) { return SEC_NAME[x]; }).join(', ') + ' nicht die Gesamtsumme im Angebot. Bitte das PDF prüfen.'
+          : 'Alle Positionen gelesen, die Summen stimmen mit dem Angebot überein.') + '</p>';
+      }
+      h += '</div>';
+    }
+    h += '<div class="panel pad-in"><div class="two">' +
+      '<label class="fld"><span>Provision manuell (optional)</span><input type="text" inputmode="decimal" data-key="' + esc(c.key) + '" data-f="provOverride" value="' + esc(k.m.provOverride === null || k.m.provOverride === undefined ? '' : deNum(k.m.provOverride)) + '" placeholder="' + esc(deNum(k.auto.toFixed(2))) + '"></label>' +
+      '<label class="fld"><span>Notiz</span><textarea rows="3" data-key="' + esc(c.key) + '" data-f="note" placeholder="z. B. Installationstermin, Ansprechpartner">' + esc(k.m.note || '') + '</textarea></label>' +
+      '</div></div>';
+    return h;
+  }
+  function fact(k, v) { return '<div class="fact"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'; }
+
+  function viewCustomer() {
+    var g = customers().find(function (x) { return x.key === B.view.key; });
+    if (!g) return '<div class="panel pad-in"><p>Kunde nicht gefunden.</p></div>';
+    var rows = g.contracts.map(function (c) { return { c: c, k: calc(c) }; });
+    var sum = function (f) { return round2(rows.reduce(function (a, x) { return a + (f(x) || 0); }, 0)); };
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: g.name }]);
+    h += '<div class="biz-top"><div><h1>' + esc(g.name) + '</h1><p class="sub">' + esc([g.no ? 'Kundennr. ' + g.no : '', g.address.join(', ')].filter(Boolean).join(' · ')) + '</p></div></div>';
+    h += '<div class="tiles">' + tile('Verträge', String(rows.length), '') + tile('Provision', eur(sum(function (x) { return x.k.prov; })), '') +
+      tile('Auszahlung (Faktor bekannt)', eur(sum(function (x) { return x.k.payout; })), '') + '</div>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Datum</th><th>Angebot</th><th class="num">Provision</th><th class="num">Faktor</th><th class="num">Auszahlung</th><th>Installiert</th><th>Abgerechnet</th></tr></thead><tbody>';
+    rows.forEach(function (x) {
+      h += '<tr><td>' + fmtDate(x.c.signed) + '</td><td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(x.c.key) + '">' + esc(shortLabel(x.c)) + '</button> ' + statusPills(x.c, x.k) + '</td>' +
+        '<td class="num">' + eur(x.k.prov) + '</td><td class="num">' + factorInput(x.c, x.k.m) + '</td><td class="num">' + eur(x.k.payout) + '</td>' +
+        '<td>' + check(x.c, x.k.m, 'installed', 'Installiert') + '</td><td>' + check(x.c, x.k.m, 'billed', 'Abgerechnet') + '</td></tr>';
+    });
+    return h + '</tbody></table></div></div>';
+  }
+
+  function viewRules() {
+    var rules = B.data.rules;
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Regeln' }]);
+    h += '<div class="biz-top"><div><h1>Provisionsregeln</h1><p class="sub">Für jede Position gilt die erste passende Regel von oben. „Betrag“ ist bei monatlichen Positionen der Monatsbeitrag.</p></div>' +
+      '<div class="biz-actions"><button type="button" class="btn" data-act="addrule">Regel hinzufügen</button><button type="button" class="btn" data-act="resetrules">Standard wiederherstellen</button></div></div>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl rules"><thead><tr><th>Bereich</th><th>Position enthält</th><th>Berechnung</th><th class="num">Wert</th><th></th></tr></thead><tbody>';
+    rules.forEach(function (r, i) {
+      var k = 'rule' + i;
+      h += '<tr><td><select class="sel" data-key="' + k + '" data-f="sec">' + ['monthly', 'onetime', 'service'].map(function (s) { return '<option value="' + s + '"' + (r.sec === s ? ' selected' : '') + '>' + SEC_NAME[s] + '</option>'; }).join('') + '</select></td>' +
+        '<td><input type="text" class="txt" data-key="' + k + '" data-f="match" value="' + esc(r.match || '') + '" placeholder="leer = alle übrigen"></td>' +
+        '<td><select class="sel" data-key="' + k + '" data-f="type">' + [['mult', 'Vielfaches des Betrags'], ['fixed', 'Festbetrag'], ['none', 'keine Provision']].map(function (o) { return '<option value="' + o[0] + '"' + (r.type === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></td>' +
+        '<td class="num"><input type="text" inputmode="decimal" class="txt num-in" data-key="' + k + '" data-f="value" value="' + esc(r.type === 'none' ? '' : deNum(r.value)) + '"' + (r.type === 'none' ? ' disabled' : '') + ' aria-label="Wert"></td>' +
+        '<td class="row-btns"><button type="button" class="btn small" data-act="up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="nach oben">↑</button><button type="button" class="btn small" data-act="down" data-i="' + i + '"' + (i === rules.length - 1 ? ' disabled' : '') + ' aria-label="nach unten">↓</button><button type="button" class="btn small danger" data-act="delrule" data-i="' + i + '">Entfernen</button></td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    // products found in the contracts
+    var prods = new Map();
+    B.contracts.forEach(function (c) {
+      (c.parsed.items || []).forEach(function (it) {
+        var key = it.section + '|' + it.name;
+        var p = prods.get(key);
+        if (!p) { p = { it: it, n: 0 }; prods.set(key, p); }
+        p.n++;
+      });
+    });
+    var arr = Array.from(prods.values()).sort(function (a, b) {
+      return ['monthly', 'onetime', 'service'].indexOf(a.it.section) - ['monthly', 'onetime', 'service'].indexOf(b.it.section) || a.it.name.localeCompare(b.it.name, 'de');
+    });
+    h += '<h2 class="h2">Positionen aus deinen Verträgen</h2>';
+    if (!arr.length) return h + '<div class="panel pad-in"><p>Sobald unterschriebene Verträge im Ordner liegen, siehst du hier, welche Regel für welche Position gilt.</p></div>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bereich</th><th>Position</th><th class="num">Verträge</th><th>Regel</th><th class="num">Beispiel</th></tr></thead><tbody>';
+    arr.forEach(function (p) {
+      var r = ruleFor(p.it);
+      h += '<tr' + (r ? '' : ' class="flag-row"') + '><td>' + SEC_NAME[p.it.section] + '</td><td class="wrap">' + esc(p.it.name) + '</td><td class="num">' + p.n + '</td><td>' + esc(ruleText(r)) + '</td><td class="num">' + eur(provOf(p.it, r)) + '</td></tr>';
+    });
+    return h + '</tbody></table></div></div>';
+  }
+
+  /* interaction in the main area */
+  function rerender() { setTimeout(function () { renderBiz(); renderCustomers(); }, 0); }
+  bizEl.addEventListener('click', function (e) {
+    var go = e.target.closest('[data-go]');
+    if (go) {
+      var v = go.dataset.go, i = v.indexOf(':');
+      if (v === 'overview') openBiz({ kind: 'overview' });
+      else openBiz({ kind: v.slice(0, i), key: v.slice(i + 1) });
+      return;
+    }
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var act = b.dataset.act, rules = B.data.rules, idx = Number(b.dataset.i);
+    if (act === 'rules') openBiz({ kind: 'rules' });
+    else if (act === 'csv') exportCsv();
+    else if (act === 'pdf') {
+      var c = B.contracts.find(function (x) { return x.key === b.dataset.key; });
+      if (c) openEntry({ handle: c.file.handle, name: c.file.name });
+    } else if (act === 'addrule') { rules.splice(Math.max(0, rules.length - 3), 0, { sec: 'monthly', match: '', type: 'mult', value: 6 }); saveData(); rerender(); }
+    else if (act === 'resetrules') {
+      armConfirm(b, 'Wirklich zurücksetzen?', function () { B.data.rules = clone(DEFAULT_RULES); saveData(); rerender(); toast('Standardregeln wiederhergestellt.'); });
+    } else if (act === 'delrule') { rules.splice(idx, 1); saveData(); rerender(); }
+    else if (act === 'up' && idx > 0) { var t = rules[idx - 1]; rules[idx - 1] = rules[idx]; rules[idx] = t; saveData(); rerender(); }
+    else if (act === 'down' && idx < rules.length - 1) { var t2 = rules[idx + 1]; rules[idx + 1] = rules[idx]; rules[idx] = t2; saveData(); rerender(); }
+  });
+  bizEl.addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.id === 'yearSel') { B.year = Number(t.value); rerender(); return; }
+    var key = t.dataset && t.dataset.key, f = t.dataset && t.dataset.f;
+    if (!key || !f) return;
+    if (key.indexOf('rule') === 0) {
+      var r = B.data.rules[Number(key.slice(4))];
+      if (!r) return;
+      if (f === 'value') {
+        var n = parseNum(t.value);
+        if (n === null || isNaN(n) || n < 0) { toast('Bitte eine Zahl eingeben, z. B. 6 oder 395.'); t.value = deNum(r.value); return; }
+        r.value = n;
+      } else if (f === 'type') { r.type = t.value; if (r.type === 'fixed' && !r.value) r.value = 395; if (r.type === 'mult' && !r.value) r.value = 6; }
+      else r[f] = t.value;
+      saveData(); rerender(); return;
+    }
+    var c = B.contracts.find(function (x) { return x.key === key; });
+    if (!c) return;
+    var m = meta(c);
+    if (f === 'installed' || f === 'billed') {
+      m[f] = t.checked; m[f + 'At'] = t.checked ? Date.now() : null;
+    } else if (f === 'factor' || f === 'provOverride') {
+      var v = parseNum(t.value);
+      if (v !== null && (isNaN(v) || v < 0 || (f === 'factor' && v > 5))) {
+        toast(f === 'factor' ? 'Bitte einen Faktor wie 0,8 oder 1,1 eingeben.' : 'Bitte einen Betrag wie 2500 oder 2.500,00 eingeben.');
+        t.value = m[f] === null || m[f] === undefined ? '' : deNum(m[f]); return;
+      }
+      m[f] = v === null ? null : round2(v * (f === 'factor' ? 1 : 1));
+      if (f === 'factor' && v !== null) m.factor = Math.round(v * 1000) / 1000;
+    } else return;
+    saveData(); rerender();
+  });
+  bizEl.addEventListener('input', function (e) {
+    var t = e.target;
+    if (t.dataset && t.dataset.f === 'note') {
+      var c = B.contracts.find(function (x) { return x.key === t.dataset.key; });
+      if (c) { meta(c).note = t.value; saveData(); }
+    }
+  });
+  function exportCsv() {
+    var rows = [['Unterschrieben', 'Kunde', 'Kundennr', 'Angebot', 'Provision', 'Faktor', 'Auszahlung', 'Installiert', 'Abgerechnet', 'Notiz', 'Datei']];
+    var num = function (n) { return n === null || n === undefined ? '' : n.toFixed(2).replace('.', ','); };
+    B.contracts.slice().sort(function (a, b) { return a.signed - b.signed; }).forEach(function (c) {
+      var k = calc(c);
+      rows.push([fmtDate(c.signed), c.custName, c.custNo, c.offerNo, num(k.prov), k.m.factor === null || k.m.factor === undefined ? '' : deNum(k.m.factor),
+                 num(k.payout), k.m.installed ? 'ja' : 'nein', k.m.billed ? 'ja' : 'nein', k.m.note || '', c.file.name]);
+    });
+    var csv = '﻿' + rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
+    var d = new Date(), name = 'Provisionen_' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '.csv';
+    var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    var a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    toast('Export gestartet: ' + name + '. Öffnet sich direkt in Excel.', { ms: 5000 });
+  }
+
+  provBtn.addEventListener('click', function () {
+    if (S.view === 'biz') { setView('pages'); return; }
+    openBiz({ kind: 'overview' });
+  });
+  document.querySelectorAll('#shelfTabs [data-tab]').forEach(function (b) { b.addEventListener('click', function () { setTab(b.dataset.tab); }); });
+  $('#custSearch').addEventListener('input', function (e) { B.q = e.target.value; renderCustomers(); });
 
   /* ---------- wiring ---------- */
   fileInput.addEventListener('change', function () {

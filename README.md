@@ -89,7 +89,40 @@ Auf dem iPad gibt es diese Liste nicht, Safari erlaubt keinen dauerhaften Ordner
 
 ---
 
-## 5. Aus anderen Apps „zur Unterschrift“ schicken
+## 5. Kunden und Provision (am PC)
+
+Im Ordnermodus liest die App alle PDFs aus dem Ablageordner für Unterschriebene aus, also auch die vom iPad, sobald sie dort liegen.
+
+**Kunden-Ordner:** In der Seitenleiste unter **Kunden** steht jeder Kunde mit seinen Verträgen: *Kunde › Angebot › Provision & Status / PDF ansehen*. Kunde, Kundennummer, Adresse, Angebotsnummer, Datum, Laufzeit und alle Positionen kommen direkt aus dem Angebots-PDF.
+
+**Provision:** Der Knopf **Provision** oben öffnet die Übersicht:
+
+- Summen für das Jahr, Monatsgruppen nach Unterschriftsdatum
+- pro Vertrag: Provision, **Faktor** (zum Eintragen, sobald er bekannt ist), Auszahlung = Provision × Faktor
+- Häkchen **Installiert** und **Abgerechnet** (mit Datum)
+- Vermerk *Faktor offen*, und *prüfen*, wenn die gelesenen Positionen nicht zur Gesamtsumme im Angebot passen
+- **Als CSV exportieren** öffnet sich direkt in Excel
+
+In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provision. Dort lässt sich die Provision bei Bedarf auch manuell überschreiben, und es gibt ein Notizfeld.
+
+**Regeln:** Über **Provision → Regeln**. Pro Regel: Bereich (monatlich, einmalig, Dienstleistung), ein Textstück aus dem Positionsnamen (leer = alle übrigen), Berechnung (Vielfaches des Betrags, Festbetrag, keine). Es gilt die erste passende Regel von oben. Voreingestellt:
+
+| Bereich | Position enthält | Provision |
+|---|---|---|
+| Monatlich | App aktive Mitarbeiter | keine |
+| Monatlich | PersonalManager aktive Mitarbeiter | keine |
+| Monatlich | App Grundgebühr | 395 € einmalig |
+| Monatlich | PersonalManager Grundgebühr | 395 € einmalig |
+| Monatlich | alle übrigen (inkl. Cloud) | 6 × Monatsbeitrag |
+| Einmalig, Dienstleistung | alle | keine |
+
+Unten auf der Regel-Seite steht jede Position aus deinen Verträgen mit der Regel, die für sie gilt. So sieht man sofort, wenn ein neues Produkt eine eigene Regel braucht.
+
+**Wo die Daten liegen:** Faktoren, Häkchen, Notizen und Regeln speichert die App in der Datei `_Unterschriftenmappe-Daten.json` im Ablageordner. OneDrive sichert und synchronisiert sie mit. Bitte nicht löschen, sonst sind die eingetragenen Faktoren weg.
+
+---
+
+## 6. Aus anderen Apps „zur Unterschrift“ schicken
 
 Web-Apps können sich auf dem iPad leider nicht selbst ins Teilen-Menü eintragen, das geht nur mit einer App aus dem App Store. Ein Kurzbefehl kommt aber nahe heran: Er legt das PDF in einem festen Ordner ab und öffnet die Unterschriftenmappe.
 
@@ -104,7 +137,7 @@ Web-Apps können sich auf dem iPad leider nicht selbst ins Teilen-Menü eintrage
 
 ---
 
-## 6. Updates einspielen
+## 7. Updates einspielen
 
 1. Die geänderten Dateien im Repository hochladen (**Add file** → **Upload files**). Vorhandene Dateien mit gleichem Namen werden ersetzt.
 2. In `sw.js` die Zeile `const VERSION = 'v…';` hochzählen.
@@ -113,15 +146,15 @@ Web-Apps können sich auf dem iPad leider nicht selbst ins Teilen-Menü eintrage
 
 ---
 
-## 7. Datenschutz
+## 8. Datenschutz
 
-- **Verträge, Feldinhalte und Unterschriften** werden nur auf dem Gerät verarbeitet. Es gibt keinen Server der App, der Dokumente empfängt. Im OneDrive landen sie nur dort, wo du selbst speicherst.
+- **Verträge, Feldinhalte, Unterschriften und Provisionsdaten** werden nur auf dem Gerät verarbeitet. Es gibt keinen Server der App, der Dokumente empfängt. Im OneDrive landen sie nur dort, wo du selbst speicherst.
 - **GitHub** liefert nur die App-Dateien aus.
 - **Keine externen Anbieter:** Die PDF-Bibliotheken liegen in diesem Repository (`lib/`), Schriften kommen vom Gerät selbst. Es werden keine Dateien von Google, Cloudflare oder anderen Diensten nachgeladen.
 
 ---
 
-## 8. Fehlersuche auf dem iPad
+## 9. Fehlersuche auf dem iPad
 
 Wenn die App eine Unterschriftsstelle nicht erkennt, zeigt der Diagnose-Modus, was sie im PDF gefunden hat:
 
@@ -132,7 +165,7 @@ Danach das Beispiel oder ein eigenes PDF öffnen. Unten erscheint ein Bericht. M
 
 ---
 
-## 9. Grenzen der aktuellen Version
+## 10. Grenzen der aktuellen Version
 
 - Passwortgeschützte oder gegen Bearbeitung gesperrte PDFs werden abgelehnt.
 - Die automatische Erkennung braucht echten Text im PDF. Bei eingescannten Verträgen die Stelle über **Hinzufügen** → **Unterschrift** festlegen.
