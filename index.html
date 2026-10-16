@@ -374,7 +374,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
 
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“.</p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 3</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -518,7 +518,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
       var vp1 = page.getViewport({ scale: 1 });
       var p = { id: nid('p'), docId: d.id, index: i, vp1: vp1, scale: 0, rendered: false, visible: false, rendering: false, task: null };
       S.pages.push(p);
-      try { await detect(p, page); } catch (e) { console.warn('Erkennung', e); }
+      try { await detect(p, page); } catch (e) { noteDetectError('Seite ' + (i + 1), e); }
     }
   }
 
@@ -544,6 +544,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     busy(false);
     rebuild();
     if (failed.length) { toast(failed[0], { ms: 6500 }); return; }
+    if (showDetectErrors()) return;
     if (added) {
       var n = S.zones.length - before;
       toast(n ? n + (n === 1 ? ' Unterschriftsstelle' : ' Unterschriftsstellen') + ' erkannt.'
@@ -580,10 +581,16 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     return String(s).replace(FILL, ' ').replace(/[_.…]{2,}/g, ' ').replace(/^[(\s]+|[):\s]+$/g, '').replace(/\s+/g, ' ').trim().slice(0, 48);
   }
 
+  var detectErrors = [];
+  function noteDetectError(step, e) {
+    console.warn('Erkennung (' + step + ')', e);
+    detectErrors.push(step + ': ' + ((e && e.message) || e));
+  }
   async function detect(p, page) {
     var vp = p.vp1, found = [];
-    var annots = await page.getAnnotations({ intent: 'display' });
-    annots.forEach(function (a) {
+    var annots = [];
+    try { annots = await page.getAnnotations({ intent: 'display' }); } catch (e) { noteDetectError('Formularfelder', e); }
+    annots.forEach(function (a) { try {
       if (a.subtype !== 'Widget' || !a.rect) return;
       if (a.fieldType === 'Sig') {
         found.push(Object.assign(toVp(vp, a.rect), { label: cleanLabel(a.fieldName || '') || 'Unterschriftsfeld', source: 'field' }));
@@ -603,10 +610,11 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
         checked: isCheck && !!fv && fv !== 'Off',
         label: cleanLabel(a.alternativeText || a.fieldName) || 'Feld',
         acro: a.fieldName, dirty: false });
-    });
-    var tc = await page.getTextContent();
+    } catch (e) { noteDetectError('Feld ' + (a && a.fieldName), e); } });
+    var tc = { items: [] };
+    try { tc = await page.getTextContent(); } catch (e) { noteDetectError('Text', e); }
     var items = tc.items.filter(function (it) { return typeof it.str === 'string' && it.str.trim() && it.transform; });
-    items.forEach(function (it, idx) {
+    items.forEach(function (it, idx) { try {
       var s = it.str.trim();
       if (s.length > 60) return;
       if (!(KEY_START.test(s) || KEY_ORT.test(s))) return;
@@ -633,7 +641,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
         }
       }
       found.push(Object.assign(clampRect(toVp(vp, rect), vp), { label: cleanLabel(s) || 'Unterschrift', source: 'text' }));
-    });
+    } catch (e) { noteDetectError('Textstelle', e); } });
     found.forEach(function (f) {
       if (f.w < 30 || f.h < 14) return;
       var dup = S.zones.some(function (z) { return z.pageId === p.id && overlap(z, f) > 0.3; });
@@ -706,6 +714,14 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     } catch (e) { console.error(e); toast('Das Beispiel konnte nicht erzeugt werden.'); }
     busy(false);
     rebuild();
+    showDetectErrors();
+  }
+  function showDetectErrors() {
+    if (!detectErrors.length) return false;
+    var msg = 'Hinweis: Die Erkennung hatte ein Problem (' + detectErrors[0].slice(0, 140) + '). Stellen bei Bedarf über „Hinzufügen“ setzen.';
+    detectErrors = [];
+    toast(msg, { ms: 15000 });
+    return true;
   }
 
   /* ---------- page view ---------- */
@@ -776,7 +792,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     });
     layout();
     S.zones.forEach(function (z) { var p = pageOf(z); if (p && p.layer) p.layer.appendChild(buildZone(z)); });
-    S.fields.forEach(function (f) { var p = pageOf(f); if (p && p.layer) p.layer.appendChild(buildField(f)); });
+    S.fields.forEach(function (f) { try { var p = pageOf(f); if (p && p.layer) p.layer.appendChild(buildField(f)); } catch (e) { noteDetectError('Feldanzeige', e); } });
     positionAll();
     S.pages.forEach(function (p) { observer.observe(p.el); });
     updateChrome();
