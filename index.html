@@ -399,6 +399,8 @@ body.shelf-on .shelf {
 .tbl .selc input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
 .yeartbl tr[aria-current] td { font-weight: 600; }
 .yeartbl tfoot td { font-weight: 600; }
+.lagfld { flex-direction: row; align-items: center; gap: 12px; }
+.stat .date-in { margin-top: 6px; }
 .txt.date-in { width: 150px; }
 .chk.existing { margin-top: 10px; font-size: 14px; }
 .chk input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
@@ -615,7 +617,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 19</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 20</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2279,7 +2281,7 @@ body.shelf-on .shelf {
 
   /* data file in the OneDrive folder */
   async function loadData() {
-    B.data = { rules: clone(DEFAULT_RULES), contracts: {}, ki: clone(DEFAULT_KI), payments: [] };
+    B.data = { rules: clone(DEFAULT_RULES), contracts: {}, ki: clone(DEFAULT_KI), payments: [], settings: { payLag: 2 } };
     B.dataOk = true;
     try {
       var fh = await F.outDir.getFileHandle(DATA_FILE);
@@ -2288,6 +2290,7 @@ body.shelf-on .shelf {
         if (Array.isArray(d.rules) && d.rules.length) B.data.rules = d.rules;
         if (d.contracts && typeof d.contracts === 'object') B.data.contracts = d.contracts;
         if (Array.isArray(d.payments)) B.data.payments = d.payments;
+        if (d.settings && typeof d.settings === 'object') B.data.settings = Object.assign({ payLag: 2 }, d.settings);
         if (d.ki && Array.isArray(d.ki.tiers) && Array.isArray(d.ki.variants)) {
           B.data.ki = d.ki;
           if (!d.kiVersion || d.kiVersion < 2) {
@@ -2340,7 +2343,7 @@ body.shelf-on .shelf {
         var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
         var w = await fh.createWritable();
         await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
-                                       rulesVersion: 4, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments }, null, 2));
+                                       rulesVersion: 4, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments, settings: B.data.settings }, null, 2));
         await w.close();
       } catch (e) {
         console.warn(e);
@@ -2713,6 +2716,13 @@ body.shelf-on .shelf {
     }
   }
 
+  function payLag() { var n = Number(B.data.settings && B.data.settings.payLag); return isNaN(n) ? 2 : n; }
+  function expIdx(m) {
+    if (!m.installed || !m.installedAt) return null;
+    var d = new Date(m.installedAt);
+    return d.getFullYear() * 12 + d.getMonth() + payLag();
+  }
+  function idxLabel(i) { return MONTHS[i % 12] + ' ' + Math.floor(i / 12); }
   function yearOf(ms) { return new Date(ms).getFullYear(); }
   function payMonth(pp) { return String(pp.month || pp.date || '').slice(0, 7); }
   function monthLabel(ym) { var m = /^(\d{4})-(\d{2})/.exec(ym || ''); return m ? MONTHS[Number(m[2]) - 1] + ' ' + m[1] : (ym || ''); }
@@ -2794,46 +2804,56 @@ body.shelf-on .shelf {
   function viewYear() {
     var cy = new Date().getFullYear();
     var ys = new Set([cy]);
-    B.contracts.forEach(function (c) { ys.add(yearOf(c.signed)); });
+    var all = B.contracts.map(function (c) { return { c: c, k: calc(c) }; });
+    all.forEach(function (x) { ys.add(yearOf(x.c.signed)); var e = expIdx(x.k.m); if (e !== null) ys.add(Math.floor(e / 12)); });
     (B.data.payments || []).forEach(function (pp) { var y = Number(payMonth(pp).slice(0, 4)); if (y) ys.add(y); });
     var years = Array.from(ys).sort(function (a, b) { return b - a; });
     if (!B.yYear || years.indexOf(B.yYear) < 0) B.yYear = cy;
     var Y = B.yYear, rows = [];
-    for (var i = 0; i < 12; i++) rows.push({ n: 0, prov: 0, payout: 0, noF: 0, paid: 0, pc: 0 });
-    B.contracts.forEach(function (c) {
-      if (yearOf(c.signed) !== Y) return;
-      var k = calc(c), r = rows[new Date(c.signed).getMonth()];
-      r.n++; r.prov += k.prov;
-      if (k.payout !== null) r.payout += k.payout; else if (k.mode !== 'none') r.noF++;
+    var blank = function () { return { n: 0, prov: 0, en: 0, exp: 0, enoF: 0, paid: 0, pc: 0 }; };
+    for (var i = 0; i < 12; i++) rows.push(blank());
+    all.forEach(function (x) {
+      var k = x.k;
+      if (yearOf(x.c.signed) === Y) { var r = rows[new Date(x.c.signed).getMonth()]; r.n++; r.prov += k.prov; }
+      var e = expIdx(k.m);
+      if (e !== null && Math.floor(e / 12) === Y && k.mode !== 'none' && !(k.m.legacy && k.m.billed)) {
+        var r2 = rows[e % 12]; r2.en++;
+        if (k.payout !== null) r2.exp += k.payout; else r2.enoF++;
+      }
     });
     (B.data.payments || []).forEach(function (pp) {
       var ym = payMonth(pp); if (ym.slice(0, 4) !== String(Y)) return;
       var r = rows[Number(ym.slice(5, 7)) - 1]; if (!r) return;
       r.paid += pp.amount || 0; r.pc++;
     });
-    var tot = rows.reduce(function (a, r) { a.n += r.n; a.prov += r.prov; a.payout += r.payout; a.noF += r.noF; a.paid += r.paid; a.pc += r.pc; return a; }, { n: 0, prov: 0, payout: 0, noF: 0, paid: 0, pc: 0 });
-    var openAll = B.contracts.map(function (c) { return calc(c); }).filter(function (k) { return !k.m.billed && k.mode !== 'none'; });
-    var openSum = round2(openAll.reduce(function (a, k) { return a + (k.payout !== null ? k.payout : k.prov); }, 0));
+    var tot = rows.reduce(function (a, r) { Object.keys(a).forEach(function (f) { a[f] += r[f]; }); return a; }, blank());
+    var pipe = all.filter(function (x) { return !x.k.m.installed && !x.k.m.billed && x.k.mode !== 'none'; });
+    var pipeSum = round2(pipe.reduce(function (a, x) { return a + (x.k.payout !== null ? x.k.payout : x.k.prov); }, 0));
+    var lag = payLag();
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Jahresübersicht' }]);
-    h += '<div class="biz-top"><div><h1>Jahresübersicht ' + Y + '</h1><p class="sub">Verkauft zählt nach Unterschriftsdatum, Eingegangen nach dem Abrechnungsmonat der Zahlung.</p></div>' +
+    h += '<div class="biz-top"><div><h1>Jahresübersicht ' + Y + '</h1><p class="sub">Ablauf: Vertrag › Installation › erste Abo-Abrechnung › Provision. „Erwartet“ setzt die Provision ' + lag + (lag === 1 ? ' Monat' : ' Monate') + ' nach dem Installationsmonat an, deshalb landen Verträge vom Jahresende in der Zahlung des Folgejahres. Ändern unter Regeln.</p></div>' +
       '<div class="biz-actions"><label class="sr" for="yYearSel">Jahr</label><select id="yYearSel" class="sel">' + years.map(function (y) { return '<option' + (y === Y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
       '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button></div></div>';
     h += '<div class="tiles">' +
-      tile('Verkauft (Provision)', eur(round2(tot.prov)), tot.n + (tot.n === 1 ? ' Vertrag' : ' Verträge')) +
-      tile('Auszahlung (Faktor bekannt)', eur(round2(tot.payout)), tot.noF ? tot.noF + ' noch ohne Faktor' : 'alle Faktoren eingetragen', tot.noF ? 'wait' : '') +
+      tile('Verkauft (Provision)', eur(round2(tot.prov)), tot.n + (tot.n === 1 ? ' Vertrag unterschrieben' : ' Verträge unterschrieben')) +
+      tile('Erwartet (Auszahlung)', eur(round2(tot.exp)), tot.en + (tot.en === 1 ? ' Vertrag' : ' Verträge') + (tot.enoF ? ', ' + tot.enoF + ' ohne Faktor' : ''), tot.enoF ? 'wait' : '') +
       tile('Eingegangen', eur(round2(tot.paid)), tot.pc + (tot.pc === 1 ? ' Zahlung' : ' Zahlungen')) +
-      tile('Noch offen (alle Jahre)', eur(openSum), openAll.length + (openAll.length === 1 ? ' Vertrag nicht abgerechnet' : ' Verträge nicht abgerechnet')) +
+      tile('Noch nicht installiert', pipe.length + (pipe.length === 1 ? ' Vertrag' : ' Verträge'), eur(pipeSum) + ' kommen noch (alle Jahre)') +
       '</div>';
-    var firstPay = rows.findIndex(function (r) { return r.pc > 0; }); if (firstPay < 0) firstPay = 99;
     var cm = Y === cy ? new Date().getMonth() : Y < cy ? 11 : -1;
-    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl yeartbl"><thead><tr><th>Monat</th><th class="num">Verträge</th><th class="num">Provision</th><th class="num">Auszahlung</th><th class="num">Eingegangen</th></tr></thead><tbody>';
+    var firstPay = rows.findIndex(function (r) { return r.pc > 0; }); if (firstPay < 0) firstPay = 99;
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl yeartbl"><thead><tr><th>Monat</th><th class="num">Unterschrieben</th><th class="num">Provision</th><th class="num">Erwartet</th><th class="num">Eingegangen</th><th class="num">Differenz</th></tr></thead><tbody>';
     rows.forEach(function (r, i) {
-      var empty = !r.n && !r.pc;
-      h += '<tr' + (empty ? ' class="dim"' : '') + (i === cm && Y === cy ? ' aria-current="true"' : '') + '><td>' + MONTHS[i] + '</td><td class="num">' + (r.n || '–') + '</td><td class="num">' + (r.n ? eur(round2(r.prov)) : '–') + '</td>' +
-        '<td class="num">' + (r.n ? eur(round2(r.payout)) + (r.noF ? ' <span class="muted">+ ' + r.noF + ' offen</span>' : '') : '–') + '</td>' +
-        '<td class="num">' + (r.pc ? eur(round2(r.paid)) : (i <= cm && i > firstPay ? '<span class="muted">keine Zahlung</span>' : '–')) + '</td></tr>';
+      var empty = !r.n && !r.pc && !r.en;
+      var diff = r.pc && r.en && !r.enoF ? round2(r.paid - r.exp) : null;
+      h += '<tr' + (empty ? ' class="dim"' : '') + (i === cm && Y === cy ? ' aria-current="true"' : '') + '><td>' + MONTHS[i] + '</td>' +
+        '<td class="num">' + (r.n || '–') + '</td><td class="num">' + (r.n ? eur(round2(r.prov)) : '–') + '</td>' +
+        '<td class="num">' + (r.en ? eur(round2(r.exp)) + ' <span class="muted">(' + r.en + ')</span>' + (r.enoF ? '<br><span class="muted">' + r.enoF + ' ohne Faktor</span>' : '') : '–') + '</td>' +
+        '<td class="num">' + (r.pc ? eur(round2(r.paid)) : (i <= cm && i > firstPay ? '<span class="muted">keine Zahlung</span>' : '–')) + '</td>' +
+        '<td class="num">' + (diff === null ? '–' : Math.abs(diff) <= PAY_TOL ? '<span class="pill okp">passt</span>' : '<span class="pill warn">' + (diff > 0 ? '+' : '') + eur(diff) + '</span>') + '</td></tr>';
     });
-    h += '</tbody><tfoot><tr><td>Summe ' + Y + '</td><td class="num">' + tot.n + '</td><td class="num">' + eur(round2(tot.prov)) + '</td><td class="num">' + eur(round2(tot.payout)) + '</td><td class="num">' + eur(round2(tot.paid)) + '</td></tr></tfoot></table></div></div>';
+    h += '</tbody><tfoot><tr><td>Summe ' + Y + '</td><td class="num">' + tot.n + '</td><td class="num">' + eur(round2(tot.prov)) + '</td><td class="num">' + eur(round2(tot.exp)) + '</td><td class="num">' + eur(round2(tot.paid)) + '</td><td></td></tr></tfoot></table></div></div>';
+    h += '<p class="sub">„Erwartet“ braucht das Installationsdatum. Es wird gesetzt, wenn du „Installiert“ abhakst, und lässt sich im Vertrag ändern. „Differenz“ erscheint, sobald für den Monat alle Faktoren eingetragen sind.</p>';
     return h;
   }
   function shortLabel(c) {
@@ -2900,7 +2920,9 @@ body.shelf-on .shelf {
       '<div class="stat"><label class="k" for="f-' + esc(c.key) + '">Faktor</label>' + factorInput(c, k.m).replace('<input ', '<input id="f-' + esc(c.key) + '" ') + '<span class="s">meist 0,6 bis 1,2</span></div>' +
       '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span></div>' +
       '<div class="stat"><span class="k">Status</span>' +
-        '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="installed"' + (k.m.installed ? ' checked' : '') + '> Installiert' + (k.m.installedAt ? ' <span class="muted">' + fmtDate(k.m.installedAt) + '</span>' : '') + '</label>' +
+        '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="installed"' + (k.m.installed ? ' checked' : '') + '> Installiert</label>' +
+        (k.m.installed ? '<label class="sr" for="ia-' + esc(c.key) + '">Installiert am</label><input id="ia-' + esc(c.key) + '" class="txt date-in" type="date" data-key="' + esc(c.key) + '" data-f="installedAt" value="' + esc(k.m.installedAt ? isoOf(k.m.installedAt) : '') + '">' +
+          (expIdx(k.m) !== null ? '<span class="s">Provision erwartet ' + esc(idxLabel(expIdx(k.m))) + '</span>' : '') : '') +
         '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="billed"' + (k.m.billed ? ' checked' : '') + '> Abgerechnet' + (k.m.billedAt ? ' <span class="muted">' + fmtDate(k.m.billedAt) + '</span>' : '') + '</label></div>' +
       '</div></div>';
     h += '<div class="panel"><div class="facts">' +
@@ -3004,6 +3026,9 @@ body.shelf-on .shelf {
     });
     h += '</tbody></table></div></div>';
     var ki = B.data.ki;
+    h += '<h2 class="h2">Ablauf bis zur Auszahlung</h2><div class="panel pad-in"><label class="fld lagfld"><span>Provision kommt so viele Monate nach dem Installationsmonat</span>' +
+      '<input type="text" inputmode="numeric" class="txt num-in" data-key="setting" data-f="payLag" value="' + payLag() + '"></label>' +
+      '<p class="sub" style="margin:8px 0 0">Beispiel mit ' + payLag() + ': installiert im Oktober, ' + (payLag() === 2 ? 'erste Abo-Abrechnung im November, ' : '') + 'Provision im ' + MONTHS[(9 + payLag()) % 12] + '. Danach richtet sich „Erwartet“ in der Jahresübersicht und die Reihenfolge der Vorschläge beim Zahlungsabgleich.</p></div>';
     h += '<h2 class="h2">KI-Bundle im Paketpreis</h2><div class="panel pad-in"><p class="sub" style="margin:0 0 12px">Steht im Angebot eine Zeile wie „Paket L &amp; KI-Bundle“, rechnet die App den KI-Anteil heraus: Das Paket läuft über seine normale Regel, der KI-Anteil über die Regel „KI-Bundle“. Welche Stufe gilt, erkennt sie an der Variante im Angebot. Im Vertrag lässt sie sich auch von Hand wählen.</p>' +
       '<label class="fld" style="max-width:280px"><span>Mögliche KI-Preise (€)</span><input type="text" class="txt" data-key="kitiers" data-f="tiers" value="' + esc(ki.tiers.map(deNum).join('; ')) + '"></label></div>' +
       '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Variante im Angebot enthält</th><th>KI-Anteil</th><th></th></tr></thead><tbody>' +
@@ -3043,7 +3068,8 @@ body.shelf-on .shelf {
   var PAY_TOL = 2; // differences up to 2 € count as rounding
   function isoToday() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function isoToDmy(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? m[3] + '.' + m[2] + '.' + m[1] : (iso || ''); }
-  function findCombos(target) {
+  function findCombos(target, month) {
+    var pm = /^(\d{4})-(\d{2})/.exec(month || ''), pIdx = pm ? Number(pm[1]) * 12 + Number(pm[2]) - 1 : null;
     var cands = B.contracts.map(function (c) { return { c: c, k: calc(c) }; })
       .filter(function (x) { return x.k.mode !== 'none' && !x.k.m.billed && x.k.prov > 0; })
       .map(function (x) {
@@ -3074,10 +3100,11 @@ body.shelf-on .shelf {
         total = round2(knownSum + unk.reduce(function (a, x) { return a + round2(x.k.prov * factor); }, 0));
       }
       return { items: items, unknown: unk.length, factor: factor, total: total, diff: round2(target - total),
-               oldest: Math.min.apply(null, items.map(function (x) { return x.c.signed; })) };
+               oldest: Math.min.apply(null, items.map(function (x) { return x.c.signed; })),
+               dist: pIdx === null ? 0 : items.reduce(function (a, x) { var e = expIdx(x.k.m); return a + (e === null ? 2 : Math.min(6, Math.abs(e - pIdx))); }, 0) };
     }).filter(function (r) { return Math.abs(r.diff) <= PAY_TOL + 0.001; });
     res.sort(function (a, b) {
-      return (a.unknown > 0) - (b.unknown > 0) || a.unknown - b.unknown || Math.abs(a.diff) - Math.abs(b.diff) || a.items.length - b.items.length || a.oldest - b.oldest;
+      return (a.unknown > 0) - (b.unknown > 0) || a.unknown - b.unknown || a.dist - b.dist || Math.abs(a.diff) - Math.abs(b.diff) || a.items.length - b.items.length || a.oldest - b.oldest;
     });
     return { results: res.slice(0, 8), more: Math.max(0, res.length - 8), candidates: n, cut: nodes > LIMIT };
   }
@@ -3121,7 +3148,7 @@ body.shelf-on .shelf {
     var f = x.known ? x.k.m.factor : factor, out = x.known ? x.k.payout : round2(x.k.prov * factor);
     return '<tr><td>' + fmtDate(x.c.signed) + '</td><td class="wrap">' + esc(x.c.custLabel || x.c.custName || '') + (x.c.custNo ? '<br><span class="muted small">KD ' + esc(x.c.custNo) + '</span>' : '') + '</td>' +
       '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(x.c.key) + '">' + esc(shortLabel(x.c)) + '</button>' +
-      (x.k.m.installed ? '' : ' <span class="pill wait">nicht installiert</span>') + '</td>' +
+      (x.k.m.installed ? (expIdx(x.k.m) !== null ? ' <span class="muted small">erwartet ' + esc(idxLabel(expIdx(x.k.m))) + '</span>' : '') : ' <span class="pill wait">nicht installiert</span>') + '</td>' +
       '<td class="num">' + eur(x.k.prov) + '</td><td class="num">' + (x.known ? deNum(f) : '<span class="pill wait">wäre ' + deNum(f) + '</span>') + '</td><td class="num">' + eur(out) + '</td></tr>';
   }
   function viewPayment() {
@@ -3191,7 +3218,7 @@ body.shelf-on .shelf {
       var amt = parseNum($('#payAmount').value);
       if (amt === null || isNaN(amt) || amt <= 0) { toast('Bitte den erhaltenen Betrag eintragen, z. B. 2.694,56.'); return; }
       readPayForm(amt);
-      B.pay.result = findCombos(B.pay.amount);
+      B.pay.result = findCombos(B.pay.amount, B.pay.month);
       renderBiz();
       return;
     }
@@ -3315,6 +3342,11 @@ body.shelf-on .shelf {
     }
     var key = t.dataset && t.dataset.key, f = t.dataset && t.dataset.f;
     if (!key || !f) return;
+    if (key === 'setting') {
+      var lg = parseInt(t.value, 10);
+      if (isNaN(lg) || lg < 0 || lg > 12) { toast('Bitte eine Zahl von 0 bis 12 eingeben.'); t.value = payLag(); return; }
+      B.data.settings = B.data.settings || {}; B.data.settings.payLag = lg; saveData(); rerender(); return;
+    }
     if (key === 'kitiers') {
       var tiers = t.value.split(/[;\s]+/).map(parseNum).filter(function (n) { return n !== null && !isNaN(n) && n > 0; });
       if (!tiers.length) { toast('Bitte mindestens einen Preis eingeben, z. B. 99; 199; 499.'); t.value = B.data.ki.tiers.map(deNum).join('; '); return; }
@@ -3343,6 +3375,9 @@ body.shelf-on .shelf {
     var m = meta(c);
     if (f === 'kiPrice') {
       m.kiPrice = t.value ? Number(t.value) : null;
+    } else if (f === 'installedAt') {
+      if (!t.value) { t.value = m.installedAt ? isoOf(m.installedAt) : ''; return; }
+      m.installedAt = new Date(t.value + 'T12:00:00').getTime(); m.installed = true;
     } else if (f === 'existing') {
       m.existing = t.checked;
     } else if (f === 'installed' || f === 'billed') {

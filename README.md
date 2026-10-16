@@ -132,7 +132,13 @@ Unten auf der Regel-Seite steht jede Position aus deinen Verträgen mit der Rege
 - **Passende Verträge suchen** sucht zusätzlich unter allen noch nicht abgerechneten Verträgen eine Kombination, deren Auszahlungen den Betrag ergeben, auch unter nicht installierten. Abweichungen bis 2 € gelten als Rundung. Fehlt ein Faktor, rechnet die App mit 0,6 bis 1,2 und zeigt, welcher Faktor sich ergäbe. **Diese Zuordnung übernehmen** hakt die Verträge als abgerechnet ab, trägt fehlende Faktoren ein und setzt vergessene „Installiert“-Häkchen.
 - Unten stehen alle Zahlungen nach Monat. **Aufheben** macht eine Zahlung samt Zuordnung rückgängig.
 
-**Jahresübersicht:** Pro Monat: Anzahl Verträge, Provision und Auszahlung nach Unterschriftsdatum, Eingegangen nach Abrechnungsmonat, dazu die Jahressummen. Oben rechts das Jahr wählen, z. B. 2027 als sauberen Start. Nach der ersten Zahlung im Jahr zeigt die Übersicht Monate ohne Zahlung als „keine Zahlung“, so fällt eine fehlende Abrechnung auf.
+**Jahresübersicht:** Bildet den Ablauf *Vertrag › Installation › erste Abo-Abrechnung › Provision* ab. Pro Monat:
+- **Unterschrieben / Provision:** nach Unterschriftsdatum
+- **Erwartet:** Auszahlung im Monat, in dem die Provision kommen sollte. Standard sind 2 Monate nach dem Installationsmonat, einstellbar unter **Regeln → Ablauf bis zur Auszahlung**. Ein Vertrag aus dem November, der im Dezember installiert wird, erscheint deshalb im Februar des Folgejahres.
+- **Eingegangen:** Zahlungen nach Abrechnungsmonat
+- **Differenz:** Eingegangen minus Erwartet. „passt“ bei bis zu 2 € Abweichung. Erscheint, sobald für den Monat alle Faktoren eingetragen sind.
+
+Die Kachel **Noch nicht installiert** zeigt, was über alle Jahre noch in der Pipeline ist. Das Installationsdatum wird beim Abhaken von „Installiert“ gesetzt und lässt sich im Vertrag unter *Status* ändern. Dort steht auch, in welchem Monat die Provision erwartet wird. Beim Zahlungsabgleich schlägt die App bevorzugt Verträge vor, deren erwarteter Monat zum Abrechnungsmonat passt. Für einen sauberen Start oben rechts 2027 wählen.
 
 **Eingescannte Verträge:** Ein Scan enthält keinen Text, die App kann daraus also weder Kunde noch Preise lesen. Solche Verträge stehen in der Übersicht mit „Scan“. In der Vertragsansicht auf **Original-Angebot verknüpfen** klicken und das digitale Angebot aus dem Angebote-Ordner wählen. Kunde, Kundennummer, Positionen und Provision kommen dann exakt aus dem Original, das unterschriebene Dokument bleibt der Scan. Das Original gilt danach in der Angebotsliste als unterschrieben. Die Verknüpfung lässt sich jederzeit wieder lösen.
 
