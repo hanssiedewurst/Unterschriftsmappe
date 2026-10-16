@@ -333,6 +333,8 @@ body.shelf-on .shelf {
 .tree summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .t-name { flex: 1; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
 .t-meta { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.t-no { display: block; font-size: 12px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.small { font-size: 12px; }
 .tree .leaf {
   width: 100%; text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 7px; cursor: pointer;
   color: var(--accent); font: 500 14px/1.3 var(--f-sans);
@@ -580,7 +582,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 8</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 9</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2355,6 +2357,7 @@ body.shelf-on .shelf {
     if (!p.ok) return true;
     var ki = kiInfo(c);
     if (ki && ki.assumed) return true;
+    if (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo) return true;
     return Object.keys(p.check || {}).some(function (k) { return !p.check[k]; });
   }
 
@@ -2388,11 +2391,16 @@ body.shelf-on .shelf {
     var m = /_unterschrieben_(\d{4})-(\d{2})-(\d{2})/.exec(f.name);
     var signed = m ? new Date(+m[1], +m[2] - 1, +m[3]).getTime() : f.mtime;
     var cust = parsed.customer || {};
+    // customer number: explicit "Kunden Nr." first, otherwise the digits before "_" in the offer number
+    var po = /^(\d{4,})[_\-\/]/.exec(parsed.offerNo || '');
+    var noFromOffer = po ? po[1] : '';
+    var custNo = cust.no || noFromOffer;
     return {
       key: parsed.offerNo ? 'A:' + parsed.offerNo : 'F:' + f.path + '/' + f.name,
       file: f, parsed: parsed, signed: signed, offerNo: parsed.offerNo || '',
-      custKey: cust.no ? 'K:' + cust.no : 'N:' + (cust.name || f.name).toLowerCase(),
-      custName: cust.name || 'Kunde nicht erkannt', custNo: cust.no || '', address: cust.address || [], older: 0
+      custKey: custNo ? 'K:' + custNo : 'N:' + (cust.name || f.name).toLowerCase(),
+      custName: cust.name || '', custNo: custNo, custNoSource: cust.no ? 'pdf' : noFromOffer ? 'offer' : '',
+      noFromOffer: noFromOffer, address: cust.address || [], older: 0
     };
   }
   async function scanContracts() {
@@ -2414,6 +2422,7 @@ body.shelf-on .shelf {
       var byKey = new Map();
       list.forEach(function (c) { if (!byKey.has(c.key)) byKey.set(c.key, c); else byKey.get(c.key).older++; });
       B.contracts = Array.from(byKey.values());
+      customers(); // merges names per customer number
       B.scanned = true;
     } catch (e) {
       console.warn(e);
@@ -2428,7 +2437,13 @@ body.shelf-on .shelf {
     B.contracts.forEach(function (c) {
       var g = map.get(c.custKey);
       if (!g) { g = { key: c.custKey, name: c.custName, no: c.custNo, address: c.address, contracts: [] }; map.set(c.custKey, g); }
+      if (!g.name && c.custName) g.name = c.custName;
+      if (!g.address.length && c.address.length) g.address = c.address;
       g.contracts.push(c);
+    });
+    map.forEach(function (g) {
+      if (!g.name) g.name = g.no ? 'Kunde ' + g.no : 'Kunde nicht erkannt';
+      g.contracts.forEach(function (c) { c.custLabel = g.name; });
     });
     return Array.from(map.values()).sort(function (a, b) { return a.name.localeCompare(b.name, 'de'); });
   }
@@ -2460,7 +2475,7 @@ body.shelf-on .shelf {
     customers().forEach(function (g) {
       if (q && (g.name + ' ' + g.no + ' ' + g.contracts.map(function (c) { return c.offerNo; }).join(' ')).toLowerCase().indexOf(q) < 0) return;
       var li = el('li');
-      var d = details('c:' + g.key, '<span class="t-name">' + esc(g.name) + '</span><span class="t-meta">' + g.contracts.length + '</span>', !!q);
+      var d = details('c:' + g.key, '<span class="t-name">' + esc(g.name) + (g.no ? '<span class="t-no">KD ' + esc(g.no) + '</span>' : '') + '</span><span class="t-meta">' + g.contracts.length + '</span>', !!q);
       var inner = el('ul');
       inner.appendChild(leaf('Kundenübersicht', function () { openBiz({ kind: 'customer', key: g.key }); }, isCurrent('customer', g.key)));
       g.contracts.forEach(function (c) {
@@ -2588,7 +2603,7 @@ body.shelf-on .shelf {
   }
   function contractRow(c, k) {
     return '<tr><td>' + fmtDate(c.signed) + '</td>' +
-      '<td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(c.custKey) + '">' + esc(c.custName) + '</button></td>' +
+      '<td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(c.custKey) + '">' + esc(c.custLabel || c.custName) + '</button>' + (c.custNo ? '<br><span class="muted small">KD ' + esc(c.custNo) + '</span>' : '') + '</td>' +
       '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> ' + statusPills(c, k) + '</td>' +
       '<td class="num">' + eur(k.prov) + '</td>' +
       '<td class="num">' + factorInput(c, k.m) + '</td>' +
@@ -2601,8 +2616,9 @@ body.shelf-on .shelf {
     var c = B.contracts.find(function (x) { return x.key === B.view.key; });
     if (!c) return '<div class="panel pad-in"><p>Dieser Vertrag ist nicht mehr im Ordner.</p></div>';
     var k = calc(c), p = c.parsed;
-    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: c.custName, go: 'customer:' + c.custKey }, { label: c.offerNo ? 'Angebot ' + c.offerNo : c.file.name }]);
-    h += '<div class="biz-top"><div><h1>' + esc(c.offerNo ? 'Angebot ' + c.offerNo : c.file.name) + '</h1><p class="sub">' + esc(c.custName) + '</p></div>' +
+    var cname = c.custLabel || c.custName || 'Kunde nicht erkannt';
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: cname, go: 'customer:' + c.custKey }, { label: c.offerNo ? 'Angebot ' + c.offerNo : c.file.name }]);
+    h += '<div class="biz-top"><div><h1>' + esc(c.offerNo ? 'Angebot ' + c.offerNo : c.file.name) + '</h1><p class="sub">' + esc(cname) + '</p></div>' +
       '<div class="biz-actions"><button type="button" class="btn" data-act="pdf" data-key="' + esc(c.key) + '">PDF ansehen</button></div></div>';
     if (p.error) h += '<div class="panel pad-in warnbox"><p>Das PDF konnte nicht gelesen werden (' + esc(p.error) + '). Trage die Provision bei Bedarf manuell ein.</p></div>';
     else if (!p.ok) h += '<div class="panel pad-in warnbox"><p>In diesem PDF wurde keine Preistabelle gefunden. Trage die Provision bei Bedarf manuell ein.</p></div>';
@@ -2621,7 +2637,9 @@ body.shelf-on .shelf {
         '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="billed"' + (k.m.billed ? ' checked' : '') + '> Abgerechnet' + (k.m.billedAt ? ' <span class="muted">' + fmtDate(k.m.billedAt) + '</span>' : '') + '</label></div>' +
       '</div></div>';
     h += '<div class="panel"><div class="facts">' +
-      fact('Kunde', c.custName + (c.custNo ? ' (Nr. ' + c.custNo + ')' : '')) +
+      fact('Kunde', cname) +
+      fact('Kundennummer', c.custNo ? c.custNo + (c.custNoSource === 'offer' ? ' (aus der Angebotsnummer)' : '') +
+        (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo ? ' – Achtung: laut Angebotsnummer ' + c.noFromOffer : '') : '–') +
       fact('Adresse', c.address.join(', ') || '–') +
       fact('Angebotsdatum', p.offerDate || '–') +
       fact('Unterschrieben', fmtDate(c.signed)) +
@@ -2813,7 +2831,7 @@ body.shelf-on .shelf {
     var num = function (n) { return n === null || n === undefined ? '' : n.toFixed(2).replace('.', ','); };
     B.contracts.slice().sort(function (a, b) { return a.signed - b.signed; }).forEach(function (c) {
       var k = calc(c);
-      rows.push([fmtDate(c.signed), c.custName, c.custNo, c.offerNo, num(k.prov), k.m.factor === null || k.m.factor === undefined ? '' : deNum(k.m.factor),
+      rows.push([fmtDate(c.signed), c.custLabel || c.custName, c.custNo, c.offerNo, num(k.prov), k.m.factor === null || k.m.factor === undefined ? '' : deNum(k.m.factor),
                  num(k.payout), k.m.installed ? 'ja' : 'nein', k.m.billed ? 'ja' : 'nein', k.m.note || '', c.file.name]);
     });
     var csv = '﻿' + rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
