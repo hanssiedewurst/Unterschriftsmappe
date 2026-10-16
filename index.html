@@ -606,7 +606,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 17</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 18</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2180,7 +2180,7 @@ body.shelf-on .shelf {
           if (q && !amounts.length && nameParts.length) { qty = Number(q[1].replace(',', '.')); return; }
           if (!amounts.length) nameParts.push(it.s);
         });
-        var name = nameParts.join(' ').trim();
+        var name = nameParts.join(' ').replace(/(\s+(inkl\.?|€))+$/i, '').trim();
         if (/^gesamt(preis|summe|betrag)/i.test(name)) {
           if (amounts.length) r.totals[sec] = amounts[amounts.length - 1];
           done[sec] = true; sec = null; last = null; return;
@@ -2227,7 +2227,7 @@ body.shelf-on .shelf {
 
   /* ---------- customers, contracts and commission (PC folder mode) ---------- */
   var DATA_FILE = '_Unterschriftenmappe-Daten.json';
-  var PARSER_VERSION = 5;
+  var PARSER_VERSION = 6;
   var DEFAULT_RULES = [
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
