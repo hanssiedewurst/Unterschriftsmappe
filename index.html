@@ -412,6 +412,12 @@ body.shelf-on .shelf {
 .ki-row { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
 .ki-row .sub { margin: 4px 0 0; }
 .muted-note { color: var(--muted); }
+.copybox {
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+}
+.copybox .k { font-size: 12.5px; color: var(--muted); }
+.copybox .cv { font-size: 18px; font-weight: 600; letter-spacing: .02em; user-select: all; -webkit-user-select: all; }
 
 /* Organizer */
 .org-head { max-width: 980px; margin: 0 auto 16px; color: var(--muted); }
@@ -582,7 +588,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 9</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 10</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2680,7 +2686,9 @@ body.shelf-on .shelf {
     var rows = g.contracts.map(function (c) { return { c: c, k: calc(c) }; });
     var sum = function (f) { return round2(rows.reduce(function (a, x) { return a + (f(x) || 0); }, 0)); };
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: g.name }]);
-    h += '<div class="biz-top"><div><h1>' + esc(g.name) + '</h1><p class="sub">' + esc([g.no ? 'Kundennr. ' + g.no : '', g.address.join(', ')].filter(Boolean).join(' · ')) + '</p></div></div>';
+    h += '<div class="biz-top"><div><h1>' + esc(g.name) + '</h1>' + (g.address.length ? '<p class="sub">' + esc(g.address.join(', ')) + '</p>' : '') + '</div>' +
+      (g.no ? '<div class="copybox"><span class="k">Kundennummer</span><span class="cv mono" id="custNoValue">' + esc(g.no) + '</span>' +
+        '<button type="button" class="btn small" data-act="copy" data-text="' + esc(g.no) + '">Kopieren</button></div>' : '') + '</div>';
     h += '<div class="tiles">' + tile('Verträge', String(rows.length), '') + tile('Provision', eur(sum(function (x) { return x.k.prov; })), '') +
       tile('Auszahlung (Faktor bekannt)', eur(sum(function (x) { return x.k.payout; })), '') + '</div>';
     h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Datum</th><th>Angebot</th><th class="num">Provision</th><th class="num">Faktor</th><th class="num">Auszahlung</th><th>Installiert</th><th>Abgerechnet</th></tr></thead><tbody>';
@@ -2751,6 +2759,18 @@ body.shelf-on .shelf {
     }
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.dataset.act, rules = B.data.rules, idx = Number(b.dataset.i);
+    if (act === 'copy') {
+      var txt = b.dataset.text;
+      var done = function () { b.textContent = 'Kopiert ✓'; setTimeout(function () { b.textContent = 'Kopieren'; }, 1800); toast('Kundennummer ' + txt + ' kopiert.'); };
+      var fallback = function () {
+        var v = $('#custNoValue');
+        if (v) { var r = document.createRange(); r.selectNodeContents(v); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+        try { if (document.execCommand('copy')) { done(); return; } } catch (e) {}
+        toast('Nummer ist markiert, mit Strg + C kopieren.');
+      };
+      try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+      return;
+    }
     if (act === 'rules') openBiz({ kind: 'rules' });
     else if (act === 'csv') exportCsv();
     else if (act === 'pdf') {
