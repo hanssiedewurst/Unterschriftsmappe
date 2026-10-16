@@ -121,6 +121,8 @@ In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provisio
 
 Unten auf der Regel-Seite steht jede Position aus deinen Verträgen mit der Regel, die für sie gilt. So sieht man sofort, wenn ein neues Produkt eine eigene Regel braucht.
 
+**Eingescannte Verträge:** Ein Scan enthält keinen Text, die App kann daraus also weder Kunde noch Preise lesen. Solche Verträge stehen in der Übersicht mit „Scan“. In der Vertragsansicht auf **Original-Angebot verknüpfen** klicken und das digitale Angebot aus dem Angebote-Ordner wählen. Kunde, Kundennummer, Positionen und Provision kommen dann exakt aus dem Original, das unterschriebene Dokument bleibt der Scan. Das Original gilt danach in der Angebotsliste als unterschrieben. Die Verknüpfung lässt sich jederzeit wieder lösen.
+
 **Wo die Daten liegen:** Faktoren, Häkchen, Notizen und Regeln speichert die App in der Datei `_Unterschriftenmappe-Daten.json` im Ablageordner. OneDrive sichert und synchronisiert sie mit. Bitte nicht löschen, sonst sind die eingetragenen Faktoren weg.
 
 ---
@@ -171,6 +173,6 @@ Danach das Beispiel oder ein eigenes PDF öffnen. Unten erscheint ein Bericht. M
 ## 10. Grenzen der aktuellen Version
 
 - Passwortgeschützte oder gegen Bearbeitung gesperrte PDFs werden abgelehnt.
-- Die automatische Erkennung braucht echten Text im PDF. Bei eingescannten Verträgen die Stelle über **Hinzufügen** → **Unterschrift** festlegen.
+- Die automatische Erkennung braucht echten Text im PDF. Bei eingescannten Verträgen die Unterschriftsstelle über **Hinzufügen** → **Unterschrift** festlegen und für die Provision das Original-Angebot verknüpfen.
 - Textfelder sind einzeilig. Zu langer Text wird automatisch kleiner gesetzt.
 - Rechtlich ist eine auf dem iPad gezeichnete Unterschrift eine *einfache elektronische Signatur*. Für Verträge mit gesetzlicher Schriftform (z. B. Kündigung eines Arbeitsverhältnisses, Befristungsabrede, Bürgschaft) reicht das nicht.

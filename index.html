@@ -417,6 +417,10 @@ body.shelf-on .shelf {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
 }
 .copybox .k { font-size: 12.5px; color: var(--muted); }
+.linkbox { border-color: var(--ok); background: var(--ok-wash); }
+.linkbox p, .warnbox p { margin: 0; max-width: 75ch; }
+.linkpick { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.linkpick .shelf-list { max-height: 280px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 4px; }
 .copybox.missing { border-color: var(--flag-edge); background: var(--flag-wash); }
 .copybox .cv-in { width: 150px; font-size: 16px; font-variant-numeric: tabular-nums; }
 .copybox .cv { font-size: 18px; font-weight: 600; letter-spacing: .02em; user-select: all; -webkit-user-select: all; }
@@ -590,7 +594,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 11</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 12</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -1982,9 +1986,10 @@ body.shelf-on .shelf {
       for await (var pair of F.outDir.entries()) { if (pair[1].kind === 'file') signed.push(pair[0].toLowerCase()); }
       var list = [];
       await walk(F.inDir, '', 0, list);
+      var linked = linkedOfferNames();
       list.forEach(function (e) {
         var base = cleanBase(e.name) + '_unterschrieben';
-        e.signed = signed.some(function (n) { return n.indexOf(base) === 0; });
+        e.signed = signed.some(function (n) { return n.indexOf(base) === 0; }) || linked.has((e.path || '') + '/' + e.name);
       });
       list.sort(function (a, b) { return b.mtime - a.mtime; });
       F.entries = list;
@@ -2126,6 +2131,7 @@ body.shelf-on .shelf {
     for (var n = 1; n <= maxPages; n++) {
       var lines = await pageLines(await pdf.getPage(n));
       r.pagesRead = n;
+      r.chars = (r.chars || 0) + lines.reduce(function (a, l) { return a + l.text.length; }, 0);
       lines.forEach(function (l, i) {
         var t = l.text, m;
         if (!r.offerNo && (m = /(?:abo)?angebot(?:s-?nr\.?)?\s*:?\s+([A-Za-z0-9][\w\-\/.]*\d[\w\-\/.]*)/i.exec(t)) && !/vom\s/i.test(t)) r.offerNo = m[1];
@@ -2196,12 +2202,13 @@ body.shelf-on .shelf {
       if (r.totals[k] !== undefined) r.check[k] = Math.abs(sum(k) - r.totals[k]) < 0.02;
     });
     r.ok = r.items.some(function (x) { return x.section === 'monthly'; });
+    r.noText = (r.chars || 0) < 40;
     return r;
   }
 
   /* ---------- customers, contracts and commission (PC folder mode) ---------- */
   var DATA_FILE = '_Unterschriftenmappe-Daten.json';
-  var PARSER_VERSION = 3;
+  var PARSER_VERSION = 4;
   var DEFAULT_RULES = [
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
@@ -2365,6 +2372,7 @@ body.shelf-on .shelf {
     if (!p.ok) return true;
     var ki = kiInfo(c);
     if (ki && ki.assumed) return true;
+    if (c.linkMissing) return true;
     if (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo) return true;
     if (!c.custNo) return true;
     return Object.keys(p.check || {}).some(function (k) { return !p.check[k]; });
@@ -2428,6 +2436,7 @@ body.shelf-on .shelf {
         if (i % 3 === 0) renderCustomers();
         list.push(makeContract(files[i], await getParsed(files[i])));
       }
+      await resolveLinks(list);
       list.sort(function (a, b) { return (b.signed - a.signed) || (b.file.mtime - a.file.mtime); });
       var byKey = new Map();
       list.forEach(function (c) { if (!byKey.has(c.key)) byKey.set(c.key, c); else byKey.get(c.key).older++; });
@@ -2442,6 +2451,30 @@ body.shelf-on .shelf {
     B.scanning = false; B.progress = '';
     if (B.rescan) { B.rescan = false; scanContracts(); return; }
     renderCustomers(); if (S.view === 'biz') renderBiz();
+  }
+  async function resolveLinks(list) {
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i], m = B.data.contracts[c.key], df = m && m.dataFrom;
+      c.linked = null; c.linkMissing = null;
+      if (!df) continue;
+      var e = F.entries.find(function (x) { return x.name === df.name && (x.path || '') === (df.path || ''); });
+      if (!e) { c.linkMissing = df.name; continue; }
+      try {
+        var file = await e.handle.getFile();
+        var parsed = await getParsed({ name: e.name, path: '@angebote/' + (e.path || ''), size: file.size, mtime: file.lastModified, file: file });
+        var t = makeContract(c.file, parsed);
+        ['parsed', 'offerNo', 'custName', 'custNo', 'custNoSource', 'noFromOffer', 'address', 'det', 'custKey'].forEach(function (k) { c[k] = t[k]; });
+        c.linked = e.name; c.scanParsed = c.scanParsed || null;
+      } catch (err) { console.warn(err); c.linkMissing = df.name; }
+    }
+  }
+  function linkedOfferNames() {
+    var set = new Set();
+    if (B.data) Object.keys(B.data.contracts).forEach(function (k) {
+      var df = B.data.contracts[k].dataFrom;
+      if (df) set.add((df.path || '') + '/' + df.name);
+    });
+    return set;
   }
   function applyManualNumbers() {
     B.contracts.forEach(function (c) {
@@ -2558,7 +2591,9 @@ body.shelf-on .shelf {
     if (k.mode === 'none') out.push('<span class="pill">keine Provision</span>');
     else if (k.m.factor === null || k.m.factor === undefined) out.push('<span class="pill wait">Faktor offen</span>');
     if (k.mode === 'manual') out.push('<span class="pill">manuell</span>');
-    if (needsCheck(c)) out.push('<span class="pill warn">prüfen</span>');
+    if (c.parsed.noText && !c.linked) out.push('<span class="pill warn">Scan</span>');
+    else if (c.linked) out.push('<span class="pill">Scan · Original verknüpft</span>');
+    if (needsCheck(c) && !(c.parsed.noText && !c.linked)) out.push('<span class="pill warn">prüfen</span>');
     return out.join(' ');
   }
   function renderBiz() {
@@ -2575,6 +2610,7 @@ body.shelf-on .shelf {
     else if (B.view.kind === 'rules') html = viewRules();
     else html = viewOverview();
     bizEl.innerHTML = html;
+    renderLinkList();
     if (foc) {
       var t = bizEl.querySelector('[data-key="' + CSS.escape(foc.key) + '"]' + (foc.f ? '[data-f="' + foc.f + '"]' : ''));
       if (t) t.focus();
@@ -2656,8 +2692,23 @@ body.shelf-on .shelf {
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: cname, go: 'customer:' + c.custKey }, { label: c.offerNo ? 'Angebot ' + c.offerNo : c.file.name }]);
     h += '<div class="biz-top"><div><h1>' + esc(c.offerNo ? 'Angebot ' + c.offerNo : c.file.name) + '</h1><p class="sub">' + esc(cname) + '</p></div>' +
       '<div class="biz-actions"><button type="button" class="btn" data-act="pdf" data-key="' + esc(c.key) + '">PDF ansehen</button></div></div>';
-    if (p.error) h += '<div class="panel pad-in warnbox"><p>Das PDF konnte nicht gelesen werden (' + esc(p.error) + '). Trage die Provision bei Bedarf manuell ein.</p></div>';
-    else if (!p.ok) h += '<div class="panel pad-in warnbox"><p>In diesem PDF wurde keine Preistabelle gefunden. Trage die Provision bei Bedarf manuell ein.</p></div>';
+    if (c.linked) {
+      h += '<div class="panel pad-in linkbox"><div class="ki-row"><p>Die Daten stammen aus dem Original-Angebot <strong>' + esc(c.linked) + '</strong> im Angebote-Ordner. Das unterschriebene Dokument bleibt der Scan.</p>' +
+        '<button type="button" class="btn small" data-act="unlink" data-key="' + esc(c.key) + '">Verknüpfung lösen</button></div></div>';
+    } else {
+      if (c.linkMissing) h += '<div class="panel pad-in warnbox"><p>Das verknüpfte Original „' + esc(c.linkMissing) + '“ liegt nicht mehr im Angebote-Ordner. Bitte neu verknüpfen.</p></div>';
+      if (p.error || !p.ok) {
+        h += '<div class="panel pad-in warnbox"><div class="ki-row"><p>' + (p.error ? 'Das PDF konnte nicht gelesen werden (' + esc(p.error) + ').'
+          : p.noText ? '<strong>Dieses PDF enthält keinen lesbaren Text, vermutlich ein Scan.</strong> Verknüpfe es mit dem digitalen Original-Angebot, dann liest die App Kunde und Positionen von dort.'
+          : 'In diesem PDF wurde keine Preistabelle gefunden. Verknüpfe es mit dem Original-Angebot oder trage die Provision manuell ein.') + '</p>' +
+          '<button type="button" class="btn small primary" data-act="linkpick" data-key="' + esc(c.key) + '">Original-Angebot verknüpfen</button></div>';
+        if (B.linkPick === c.key) {
+          h += '<div class="linkpick"><input type="search" class="txt" id="linkSearch" placeholder="Angebot suchen (Name, Nummer)" autocomplete="off" value="' + esc(B.linkQ || '') + '">' +
+            '<ul class="shelf-list" id="linkList"></ul></div>';
+        }
+        h += '</div>';
+      }
+    }
     h += '<div class="panel"><div class="status-grid">' +
       '<div class="stat"><span class="k">Provision</span><span class="v">' + eur(k.prov) + '</span>' +
         '<div class="seg" role="group" aria-label="Provision berechnen">' +
@@ -2707,6 +2758,21 @@ body.shelf-on .shelf {
       '<label class="fld"><span>Notiz</span><textarea rows="3" data-key="' + esc(c.key) + '" data-f="note" placeholder="z. B. Installationstermin, Ansprechpartner">' + esc(k.m.note || '') + '</textarea></label>' +
       '</div></div>';
     return h;
+  }
+  function renderLinkList() {
+    var ul = $('#linkList'); if (!ul) return;
+    ul.textContent = '';
+    var q = (B.linkQ || '').trim().toLowerCase();
+    var items = F.entries.filter(function (e) { return !q || (e.name + ' ' + e.path).toLowerCase().indexOf(q) >= 0; }).slice(0, 60);
+    if (!items.length) { ul.appendChild(el('li', 'si-empty', F.entries.length ? 'Nichts gefunden.' : 'Im Angebote-Ordner liegen keine PDFs.')); return; }
+    items.forEach(function (e) {
+      var li = el('li'), b = el('button', 'shelf-item');
+      b.type = 'button'; b.dataset.act = 'link'; b.dataset.i = String(F.entries.indexOf(e));
+      b.appendChild(el('span', 'si-name', e.name.replace(/\.pdf$/i, '')));
+      b.appendChild(el('span', 'si-meta', (e.path ? e.path + ' · ' : '') + fmtDate(e.mtime)));
+      if (e.signed) b.appendChild(el('span', 'si-badge', 'unterschrieben'));
+      li.appendChild(b); ul.appendChild(li);
+    });
   }
   function fact(k, v) { return '<div class="fact"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>'; }
 
@@ -2795,6 +2861,25 @@ body.shelf-on .shelf {
     }
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.dataset.act, rules = B.data.rules, idx = Number(b.dataset.i);
+    if (act === 'linkpick') { B.linkPick = B.linkPick === b.dataset.key ? null : b.dataset.key; B.linkQ = ''; renderBiz(); var ls = $('#linkSearch'); if (ls) ls.focus(); return; }
+    if (act === 'link') {
+      var ce = B.contracts.find(function (x) { return x.key === B.linkPick; }), en = F.entries[Number(b.dataset.i)];
+      if (!ce || !en) return;
+      meta(ce).dataFrom = { name: en.name, path: en.path || '' };
+      B.linkPick = null; saveData();
+      toast('Verknüpft mit „' + en.name + '“. Daten werden übernommen …');
+      B.view = { kind: 'contract', key: ce.key };
+      scanContracts().then(function () { refreshShelfMarks(); });
+      return;
+    }
+    if (act === 'unlink') {
+      var cu2 = B.contracts.find(function (x) { return x.key === b.dataset.key; });
+      if (!cu2) return;
+      delete meta(cu2).dataFrom; saveData();
+      toast('Verknüpfung gelöst.');
+      scanContracts().then(function () { refreshShelfMarks(); });
+      return;
+    }
     if (act === 'editno') { B.editNo = b.dataset.key; renderBiz(); var ei = $('#custNoInput'); if (ei) { ei.focus(); ei.select(); } return; }
     if (act === 'cancelno') { B.editNo = null; renderBiz(); return; }
     if (act === 'saveno') {
@@ -2881,6 +2966,14 @@ body.shelf-on .shelf {
       if (f === 'factor' && v !== null) m.factor = Math.round(v * 1000) / 1000;
     } else return;
     saveData(); rerender();
+  });
+  function refreshShelfMarks() {
+    var linked = linkedOfferNames();
+    F.entries.forEach(function (e) { if (linked.has((e.path || '') + '/' + e.name)) e.signed = true; });
+    renderShelf();
+  }
+  bizEl.addEventListener('input', function (e) {
+    if (e.target.id === 'linkSearch') { B.linkQ = e.target.value; renderLinkList(); }
   });
   bizEl.addEventListener('keydown', function (e) {
     if (e.target.id === 'custNoInput' && e.key === 'Enter') { e.preventDefault(); var sb = bizEl.querySelector('[data-act="saveno"]'); if (sb) sb.click(); }
