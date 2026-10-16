@@ -107,19 +107,19 @@ In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provisio
 
 **KI-Bundle:** Steht im Angebot eine Zeile wie „Paket L & KI-Bundle“, rechnet die App den KI-Anteil (99, 199 oder 499 €) aus dem Paketpreis heraus: das Paket mit 6 ×, den KI-Anteil mit 4 ×. Die Stufe erkennt sie an der Variante im Angebot (voreingestellt: HalloPetra „Einzelkämpfer“ = 99 €, „Betriebe“ = 199 €, „Mittelstand“ = 499 €; anpassbar unter **Regeln**). Ist sie nicht erkennbar, nimmt die App die kleinste Stufe und markiert den Vertrag mit „prüfen“. Im Vertrag lässt sich die Stufe von Hand wählen. Ein einzeln verkauftes KI-Bundle läuft direkt über die Regel „KI-Bundle“.
 
-**Bestandskunden mit HalloPetra:** Kauft ein Bestandskunde HalloPetra dazu, in der Vertragsansicht unter „Nach Regeln“ das Häkchen **Bestandskunde** setzen. Dann zählt nur der KI-Bundle-Anteil (4 ×, auch wenn er im Paketpreis steckt), alle anderen Positionen stehen auf 0 €. In der Übersicht steht „Bestandskunde“, in der CSV eine eigene Spalte. Findet die App im Angebot kein KI-Bundle, markiert sie den Vertrag mit „prüfen“.
+**Bestandskunden (Zusatzprodukte):** Kauft ein Bestandskunde HalloPetra, die App oder den PersonalManager dazu, in der Vertragsansicht unter „Nach Regeln“ das Häkchen **Bestandskunde** setzen. Dann zählen nur die Zusatzprodukte: KI-Bundle 4 × (auch wenn es im Paketpreis steckt), App Grundgebühr 395 €, PersonalManager Grundgebühr 395 €. Alle anderen Positionen stehen auf 0 €. Welche Regeln bei Bestandskunden zählen, legst du unter **Regeln** in der Spalte „Bestandskunde“ fest. In der Übersicht steht „Bestandskunde“, in der CSV eine eigene Spalte. Findet die App kein Zusatzprodukt im Angebot, markiert sie den Vertrag mit „prüfen“.
 
 **Regeln:** Über **Provision → Regeln**. Pro Regel: Bereich (monatlich, einmalig, Dienstleistung), ein Textstück aus dem Positionsnamen (leer = alle übrigen), Berechnung (Vielfaches des Betrags, Festbetrag, keine). Es gilt die erste passende Regel von oben. Voreingestellt:
 
-| Bereich | Position enthält | Provision |
-|---|---|---|
-| Monatlich | App aktive Mitarbeiter | keine |
-| Monatlich | PersonalManager aktive Mitarbeiter | keine |
-| Monatlich | App Grundgebühr | 395 € einmalig |
-| Monatlich | PersonalManager Grundgebühr | 395 € einmalig |
-| Monatlich | KI-Bundle | 4 × KI-Anteil |
-| Monatlich | alle übrigen (inkl. Cloud) | 6 × Monatsbeitrag |
-| Einmalig, Dienstleistung | alle | keine |
+| Bereich | Position enthält | Provision | Bestandskunde |
+|---|---|---|---|
+| Monatlich | App aktive Mitarbeiter | keine | – |
+| Monatlich | PersonalManager aktive Mitarbeiter | keine | – |
+| Monatlich | App Grundgebühr | 395 € einmalig | zählt |
+| Monatlich | PersonalManager Grundgebühr | 395 € einmalig | zählt |
+| Monatlich | KI-Bundle | 4 × KI-Anteil | zählt |
+| Monatlich | alle übrigen (inkl. Cloud) | 6 × Monatsbeitrag | – |
+| Einmalig, Dienstleistung | alle | keine | – |
 
 Unten auf der Regel-Seite steht jede Position aus deinen Verträgen mit der Regel, die für sie gilt. So sieht man sofort, wenn ein neues Produkt eine eigene Regel braucht.
 

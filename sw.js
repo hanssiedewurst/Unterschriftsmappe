@@ -1,7 +1,7 @@
 /* Offline-Speicher der Unterschriftenmappe.
    Bei jeder Änderung an den App-Dateien VERSION hochzählen (v1 -> v2 ...),
    damit die iPads die neue Fassung abholen. */
-const VERSION = 'v14';
+const VERSION = 'v15';
 const CACHE = 'unterschriftenmappe-' + VERSION;
 
 const CORE = [

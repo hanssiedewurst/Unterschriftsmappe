@@ -386,6 +386,7 @@ body.shelf-on .shelf {
 .rules .txt { width: 100%; min-width: 200px; }
 .row-btns { display: flex; gap: 6px; }
 .chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.tbl .ctr { text-align: center; }
 .chk.existing { margin-top: 10px; font-size: 14px; }
 .chk input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
 .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; vertical-align: middle; }
@@ -601,7 +602,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 14</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 15</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2219,9 +2220,9 @@ body.shelf-on .shelf {
   var DEFAULT_RULES = [
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
-    { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 395 },
-    { sec: 'monthly', match: 'PersonalManager Grundgebühr', type: 'fixed', value: 395 },
-    { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4 },
+    { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 395, existing: true },
+    { sec: 'monthly', match: 'PersonalManager Grundgebühr', type: 'fixed', value: 395, existing: true },
+    { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4, existing: true },
     { sec: 'monthly', match: '', type: 'mult', value: 6 },
     { sec: 'onetime', match: '', type: 'none', value: 0 },
     { sec: 'service', match: '', type: 'none', value: 0 }
@@ -2279,6 +2280,12 @@ body.shelf-on .shelf {
             B.data.rules.splice(at < 0 ? B.data.rules.length : at, 0, { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4 });
           }
         }
+        if (!d.rulesVersion || d.rulesVersion < 3) {
+          // add-on products that also earn commission when sold to existing customers
+          B.data.rules.forEach(function (r) {
+            if (r.existing === undefined && /ki[-\s]?bundle|app\s+grundgeb|personalmanager\s+grundgeb/i.test(r.match || '')) r.existing = true;
+          });
+        }
       }
     } catch (e) {
       if (e && e.name === 'NotFoundError') return;
@@ -2296,7 +2303,7 @@ body.shelf-on .shelf {
         var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
         var w = await fh.createWritable();
         await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
-                                       rulesVersion: 2, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments }, null, 2));
+                                       rulesVersion: 3, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments }, null, 2));
         await w.close();
       } catch (e) {
         console.warn(e);
@@ -2370,6 +2377,11 @@ body.shelf-on .shelf {
     var r = B.data.rules.find(function (x) { return x.sec === 'monthly' && /ki[-\s]?bundle/i.test(String(x.match || '')); });
     return r || { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4 };
   }
+  function addonNames() {
+    var n = B.data.rules.filter(function (r) { return r.existing && r.type !== 'none' && String(r.match || '').trim(); })
+      .map(function (r) { return String(r.match).trim().replace(/\s+Grundgebühr$/i, ''); });
+    return n.length ? n.join(', ') : 'keine Zusatzprodukte festgelegt';
+  }
   function isKiItem(it) {
     if (it.ki) return true;
     return it.section === 'monthly' && it.total > 0 && !KI_RE.test(it.name) && /ki[-\s]?bundle|hallo\s*petra/i.test(it.name);
@@ -2380,7 +2392,8 @@ body.shelf-on .shelf {
     var lines = expandItems(c, info).map(function (it) {
       var r = ruleFor(it), l = { item: it, rule: r, prov: provOf(it, r) };
       if (existing) {
-        if (isKiItem(it)) { l.rule = kiRule(); l.prov = provOf(it, l.rule); l.kiPart = true; }
+        if (isKiItem(it)) { l.rule = kiRule(); l.prov = provOf(it, l.rule); }
+        if (l.rule && l.rule.existing && l.rule.type !== 'none') l.addon = true;
         else { l.prov = 0; l.existing = true; }
       }
       return l;
@@ -2390,7 +2403,7 @@ body.shelf-on .shelf {
     var prov = mode === 'none' ? 0 : mode === 'manual' && m.provOverride !== null && m.provOverride !== undefined ? m.provOverride : auto;
     var payout = mode === 'none' ? 0 : m.factor !== null && m.factor !== undefined ? round2(prov * m.factor) : null;
     return { lines: lines, auto: auto, prov: prov, payout: payout, m: m, mode: mode, ki: info, existing: existing,
-             noKi: existing && !lines.some(function (l) { return l.kiPart; }) };
+             noAddon: existing && !lines.some(function (l) { return l.addon && l.prov > 0; }) };
   }
   function needsCheck(c) {
     var p = c.parsed;
@@ -2398,7 +2411,7 @@ body.shelf-on .shelf {
     var ki = kiInfo(c);
     if (ki && ki.assumed) return true;
     var mm = B.data.contracts[c.key];
-    if (mm && mm.existing && !expandItems(c, ki).some(isKiItem)) return true;
+    if (mm && mm.existing && calc(c).noAddon) return true;
     if (c.linkMissing) return true;
     if (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo) return true;
     if (!c.custNo) return true;
@@ -2751,7 +2764,7 @@ body.shelf-on .shelf {
         (k.mode === 'manual' ? '<label class="sr" for="po-' + esc(c.key) + '">Provision manuell</label><input id="po-' + esc(c.key) + '" class="factor wide" type="text" inputmode="decimal" data-key="' + esc(c.key) + '" data-f="provOverride" value="' + esc(k.m.provOverride === null || k.m.provOverride === undefined ? '' : deNum(k.m.provOverride.toFixed(2))) + '" placeholder="' + esc(deNum(k.auto.toFixed(2))) + '">' : '') +
         (k.mode === 'auto' ? '<label class="chk existing"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="existing"' + (k.existing ? ' checked' : '') + '> Bestandskunde</label>' : '') +
         '<span class="s">' + (k.mode === 'none' ? 'Für diesen Vertrag gibt es keine Provision' : k.mode === 'manual' ? 'Nach Regeln wären es ' + eur(k.auto)
-          : k.existing ? 'Nur das KI-Bundle zählt (' + esc(ruleText(kiRule())) + ')' : 'Nach Regeln berechnet') + '</span></div>' +
+          : k.existing ? 'Nur Zusatzprodukte zählen: ' + esc(addonNames()) : 'Nach Regeln berechnet') + '</span></div>' +
       '<div class="stat"><label class="k" for="f-' + esc(c.key) + '">Faktor</label>' + factorInput(c, k.m).replace('<input ', '<input id="f-' + esc(c.key) + '" ') + '<span class="s">meist 0,6 bis 1,2</span></div>' +
       '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span></div>' +
       '<div class="stat"><span class="k">Status</span>' +
@@ -2768,8 +2781,8 @@ body.shelf-on .shelf {
       fact('Laufzeit', p.term || '–') +
       fact('Datei', (c.file.path ? c.file.path + ' › ' : '') + c.file.name + (c.older ? ' (dazu ' + c.older + ' ältere Fassung' + (c.older > 1 ? 'en' : '') + ')' : '')) +
       '</div></div>';
-    if (k.noKi && k.mode === 'auto') {
-      h += '<div class="panel pad-in warnbox"><p><strong>Bestandskunde, aber kein KI-Bundle gefunden.</strong> In diesem Angebot steht keine Position mit „KI-Bundle“ oder „HalloPetra“ und einem Preis, deshalb ergibt sich 0 €. Prüfe das Angebot oder trage die Provision manuell ein.</p></div>';
+    if (k.noAddon && k.mode === 'auto') {
+      h += '<div class="panel pad-in warnbox"><p><strong>Bestandskunde, aber kein Zusatzprodukt gefunden.</strong> In diesem Angebot steht keine Position, die bei Bestandskunden zählt (' + esc(addonNames()) + '), deshalb ergibt sich 0 €. Prüfe das Angebot, die Regeln oder trage die Provision manuell ein.</p></div>';
     }
     if (k.ki) {
       h += '<div class="panel pad-in ki-box"><div class="ki-row"><div><strong>KI-Bundle im Paketpreis</strong><p class="sub">In „' + esc(k.ki.item.name) + '“ (' + eur(k.ki.item.total) + ') steckt das KI-Bundle. ' +
@@ -2780,7 +2793,7 @@ body.shelf-on .shelf {
     if (p.items && p.items.length) {
       h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bereich</th><th>Position</th><th class="num">Menge</th><th class="num">Betrag</th><th>Regel</th><th class="num">Provision</th></tr></thead><tbody>';
       k.lines.forEach(function (l) {
-        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + (l.item.from ? ' <span class="muted">aus „' + esc(l.item.from) + '“</span>' : '') + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.incl ? '<span class="muted">im Preis enthalten</span>' : l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + (l.existing ? 'Bestandskunde, keine' : esc(ruleText(l.rule)) + (l.kiPart && k.existing ? ' <span class="muted">(KI-Bundle)</span>' : '')) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
+        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + (l.item.from ? ' <span class="muted">aus „' + esc(l.item.from) + '“</span>' : '') + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.incl ? '<span class="muted">im Preis enthalten</span>' : l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + (l.existing ? 'Bestandskunde, keine' : esc(ruleText(l.rule)) + (l.addon ? ' <span class="muted">(Zusatzprodukt)</span>' : '')) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
       });
       h += '</tbody><tfoot><tr><td colspan="5">Provision laut Regeln</td><td class="num">' + eur(k.auto) + '</td></tr></tfoot></table></div>';
       var chk = Object.keys(p.check || {});
@@ -2843,15 +2856,16 @@ body.shelf-on .shelf {
   function viewRules() {
     var rules = B.data.rules;
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Regeln' }]);
-    h += '<div class="biz-top"><div><h1>Provisionsregeln</h1><p class="sub">Für jede Position gilt die erste passende Regel von oben. „Betrag“ ist bei monatlichen Positionen der Monatsbeitrag.</p></div>' +
+    h += '<div class="biz-top"><div><h1>Provisionsregeln</h1><p class="sub">Für jede Position gilt die erste passende Regel von oben. „Betrag“ ist bei monatlichen Positionen der Monatsbeitrag. Bei Verträgen mit dem Häkchen „Bestandskunde“ zählen nur die Regeln, die in der Spalte „Bestandskunde“ abgehakt sind.</p></div>' +
       '<div class="biz-actions"><button type="button" class="btn" data-act="addrule">Regel hinzufügen</button><button type="button" class="btn" data-act="resetrules">Standard wiederherstellen</button></div></div>';
-    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl rules"><thead><tr><th>Bereich</th><th>Position enthält</th><th>Berechnung</th><th class="num">Wert</th><th></th></tr></thead><tbody>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl rules"><thead><tr><th>Bereich</th><th>Position enthält</th><th>Berechnung</th><th class="num">Wert</th><th class="ctr">Bestandskunde</th><th></th></tr></thead><tbody>';
     rules.forEach(function (r, i) {
       var k = 'rule' + i;
       h += '<tr><td><select class="sel" data-key="' + k + '" data-f="sec">' + ['monthly', 'onetime', 'service'].map(function (s) { return '<option value="' + s + '"' + (r.sec === s ? ' selected' : '') + '>' + SEC_NAME[s] + '</option>'; }).join('') + '</select></td>' +
         '<td><input type="text" class="txt" data-key="' + k + '" data-f="match" value="' + esc(r.match || '') + '" placeholder="leer = alle übrigen"></td>' +
         '<td><select class="sel" data-key="' + k + '" data-f="type">' + [['mult', 'Vielfaches des Betrags'], ['fixed', 'Festbetrag'], ['none', 'keine Provision']].map(function (o) { return '<option value="' + o[0] + '"' + (r.type === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></td>' +
         '<td class="num"><input type="text" inputmode="decimal" class="txt num-in" data-key="' + k + '" data-f="value" value="' + esc(r.type === 'none' ? '' : deNum(r.value)) + '"' + (r.type === 'none' ? ' disabled' : '') + ' aria-label="Wert"></td>' +
+        '<td class="ctr"><label class="chk"><input type="checkbox" data-key="' + k + '" data-f="existing"' + (r.existing ? ' checked' : '') + (r.type === 'none' ? ' disabled' : '') + ' aria-label="zählt auch bei Bestandskunden"></label></td>' +
         '<td class="row-btns"><button type="button" class="btn small" data-act="up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="nach oben">↑</button><button type="button" class="btn small" data-act="down" data-i="' + i + '"' + (i === rules.length - 1 ? ' disabled' : '') + ' aria-label="nach unten">↓</button><button type="button" class="btn small danger" data-act="delrule" data-i="' + i + '">Entfernen</button></td></tr>';
     });
     h += '</tbody></table></div></div>';
@@ -3130,7 +3144,8 @@ body.shelf-on .shelf {
         var n = parseNum(t.value);
         if (n === null || isNaN(n) || n < 0) { toast('Bitte eine Zahl eingeben, z. B. 6 oder 395.'); t.value = deNum(r.value); return; }
         r.value = n;
-      } else if (f === 'type') { r.type = t.value; if (r.type === 'fixed' && !r.value) r.value = 395; if (r.type === 'mult' && !r.value) r.value = 6; }
+      } else if (f === 'existing') { r.existing = t.checked; }
+      else if (f === 'type') { r.type = t.value; if (r.type === 'fixed' && !r.value) r.value = 395; if (r.type === 'mult' && !r.value) r.value = 6; }
       else r[f] = t.value;
       saveData(); rerender(); return;
     }
