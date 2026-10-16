@@ -386,6 +386,7 @@ body.shelf-on .shelf {
 .rules .txt { width: 100%; min-width: 200px; }
 .row-btns { display: flex; gap: 6px; }
 .chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.chk.existing { margin-top: 10px; font-size: 14px; }
 .chk input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
 .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; vertical-align: middle; }
 .pill.wait { background: var(--flag-wash); color: var(--ink); border: 1px solid var(--flag-edge); }
@@ -600,7 +601,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 13</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 14</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2364,21 +2365,40 @@ body.shelf-on .shelf {
     });
     return out;
   }
+  /* existing customers buying HalloPetra: only the KI-Bundle share earns commission */
+  function kiRule() {
+    var r = B.data.rules.find(function (x) { return x.sec === 'monthly' && /ki[-\s]?bundle/i.test(String(x.match || '')); });
+    return r || { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4 };
+  }
+  function isKiItem(it) {
+    if (it.ki) return true;
+    return it.section === 'monthly' && it.total > 0 && !KI_RE.test(it.name) && /ki[-\s]?bundle|hallo\s*petra/i.test(it.name);
+  }
   function provMode(m) { return m.provMode || (m.provOverride !== null && m.provOverride !== undefined ? 'manual' : 'auto'); }
   function calc(c) {
-    var info = kiInfo(c);
-    var lines = expandItems(c, info).map(function (it) { var r = ruleFor(it); return { item: it, rule: r, prov: provOf(it, r) }; });
+    var info = kiInfo(c), m = meta(c), existing = !!m.existing;
+    var lines = expandItems(c, info).map(function (it) {
+      var r = ruleFor(it), l = { item: it, rule: r, prov: provOf(it, r) };
+      if (existing) {
+        if (isKiItem(it)) { l.rule = kiRule(); l.prov = provOf(it, l.rule); l.kiPart = true; }
+        else { l.prov = 0; l.existing = true; }
+      }
+      return l;
+    });
     var auto = round2(lines.reduce(function (a, l) { return a + l.prov; }, 0));
-    var m = meta(c), mode = provMode(m);
+    var mode = provMode(m);
     var prov = mode === 'none' ? 0 : mode === 'manual' && m.provOverride !== null && m.provOverride !== undefined ? m.provOverride : auto;
     var payout = mode === 'none' ? 0 : m.factor !== null && m.factor !== undefined ? round2(prov * m.factor) : null;
-    return { lines: lines, auto: auto, prov: prov, payout: payout, m: m, mode: mode, ki: info };
+    return { lines: lines, auto: auto, prov: prov, payout: payout, m: m, mode: mode, ki: info, existing: existing,
+             noKi: existing && !lines.some(function (l) { return l.kiPart; }) };
   }
   function needsCheck(c) {
     var p = c.parsed;
     if (!p.ok) return true;
     var ki = kiInfo(c);
     if (ki && ki.assumed) return true;
+    var mm = B.data.contracts[c.key];
+    if (mm && mm.existing && !expandItems(c, ki).some(isKiItem)) return true;
     if (c.linkMissing) return true;
     if (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo) return true;
     if (!c.custNo) return true;
@@ -2598,6 +2618,7 @@ body.shelf-on .shelf {
     if (k.mode === 'none') out.push('<span class="pill">keine Provision</span>');
     else if (k.m.factor === null || k.m.factor === undefined) out.push('<span class="pill wait">Faktor offen</span>');
     if (k.mode === 'manual') out.push('<span class="pill">manuell</span>');
+    if (k.existing && k.mode === 'auto') out.push('<span class="pill">Bestandskunde</span>');
     if (c.parsed.noText && !c.linked) out.push('<span class="pill warn">Scan</span>');
     else if (c.linked) out.push('<span class="pill">Scan · Original verknüpft</span>');
     if (needsCheck(c) && !(c.parsed.noText && !c.linked)) out.push('<span class="pill warn">prüfen</span>');
@@ -2728,7 +2749,9 @@ body.shelf-on .shelf {
             return '<button type="button" data-act="mode" data-mode="' + o[0] + '" data-key="' + esc(c.key) + '" aria-pressed="' + (k.mode === o[0]) + '">' + o[1] + '</button>';
           }).join('') + '</div>' +
         (k.mode === 'manual' ? '<label class="sr" for="po-' + esc(c.key) + '">Provision manuell</label><input id="po-' + esc(c.key) + '" class="factor wide" type="text" inputmode="decimal" data-key="' + esc(c.key) + '" data-f="provOverride" value="' + esc(k.m.provOverride === null || k.m.provOverride === undefined ? '' : deNum(k.m.provOverride.toFixed(2))) + '" placeholder="' + esc(deNum(k.auto.toFixed(2))) + '">' : '') +
-        '<span class="s">' + (k.mode === 'none' ? 'Für diesen Vertrag gibt es keine Provision' : k.mode === 'manual' ? 'Nach Regeln wären es ' + eur(k.auto) : 'Nach Regeln berechnet') + '</span></div>' +
+        (k.mode === 'auto' ? '<label class="chk existing"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="existing"' + (k.existing ? ' checked' : '') + '> Bestandskunde</label>' : '') +
+        '<span class="s">' + (k.mode === 'none' ? 'Für diesen Vertrag gibt es keine Provision' : k.mode === 'manual' ? 'Nach Regeln wären es ' + eur(k.auto)
+          : k.existing ? 'Nur das KI-Bundle zählt (' + esc(ruleText(kiRule())) + ')' : 'Nach Regeln berechnet') + '</span></div>' +
       '<div class="stat"><label class="k" for="f-' + esc(c.key) + '">Faktor</label>' + factorInput(c, k.m).replace('<input ', '<input id="f-' + esc(c.key) + '" ') + '<span class="s">meist 0,6 bis 1,2</span></div>' +
       '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span></div>' +
       '<div class="stat"><span class="k">Status</span>' +
@@ -2745,6 +2768,9 @@ body.shelf-on .shelf {
       fact('Laufzeit', p.term || '–') +
       fact('Datei', (c.file.path ? c.file.path + ' › ' : '') + c.file.name + (c.older ? ' (dazu ' + c.older + ' ältere Fassung' + (c.older > 1 ? 'en' : '') + ')' : '')) +
       '</div></div>';
+    if (k.noKi && k.mode === 'auto') {
+      h += '<div class="panel pad-in warnbox"><p><strong>Bestandskunde, aber kein KI-Bundle gefunden.</strong> In diesem Angebot steht keine Position mit „KI-Bundle“ oder „HalloPetra“ und einem Preis, deshalb ergibt sich 0 €. Prüfe das Angebot oder trage die Provision manuell ein.</p></div>';
+    }
     if (k.ki) {
       h += '<div class="panel pad-in ki-box"><div class="ki-row"><div><strong>KI-Bundle im Paketpreis</strong><p class="sub">In „' + esc(k.ki.item.name) + '“ (' + eur(k.ki.item.total) + ') steckt das KI-Bundle. ' +
         (k.ki.ok ? 'Herausgerechnet: ' + eur(k.ki.price) + ', ' + esc(k.ki.source) + '.' : 'Der KI-Anteil passt nicht zum Paketpreis, bitte wählen.') + '</p></div>' +
@@ -2754,7 +2780,7 @@ body.shelf-on .shelf {
     if (p.items && p.items.length) {
       h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bereich</th><th>Position</th><th class="num">Menge</th><th class="num">Betrag</th><th>Regel</th><th class="num">Provision</th></tr></thead><tbody>';
       k.lines.forEach(function (l) {
-        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + (l.item.from ? ' <span class="muted">aus „' + esc(l.item.from) + '“</span>' : '') + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.incl ? '<span class="muted">im Preis enthalten</span>' : l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + esc(ruleText(l.rule)) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
+        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + (l.item.from ? ' <span class="muted">aus „' + esc(l.item.from) + '“</span>' : '') + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.incl ? '<span class="muted">im Preis enthalten</span>' : l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + (l.existing ? 'Bestandskunde, keine' : esc(ruleText(l.rule)) + (l.kiPart && k.existing ? ' <span class="muted">(KI-Bundle)</span>' : '')) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
       });
       h += '</tbody><tfoot><tr><td colspan="5">Provision laut Regeln</td><td class="num">' + eur(k.auto) + '</td></tr></tfoot></table></div>';
       var chk = Object.keys(p.check || {});
@@ -3113,6 +3139,8 @@ body.shelf-on .shelf {
     var m = meta(c);
     if (f === 'kiPrice') {
       m.kiPrice = t.value ? Number(t.value) : null;
+    } else if (f === 'existing') {
+      m.existing = t.checked;
     } else if (f === 'installed' || f === 'billed') {
       m[f] = t.checked; m[f + 'At'] = t.checked ? Date.now() : null;
     } else if (f === 'factor' || f === 'provOverride') {
@@ -3147,12 +3175,12 @@ body.shelf-on .shelf {
     }
   });
   function exportCsv() {
-    var rows = [['Unterschrieben', 'Kunde', 'Kundennr', 'Angebot', 'Provision', 'Faktor', 'Auszahlung', 'Installiert', 'Abgerechnet', 'Notiz', 'Datei']];
+    var rows = [['Unterschrieben', 'Kunde', 'Kundennr', 'Angebot', 'Provision', 'Faktor', 'Auszahlung', 'Installiert', 'Abgerechnet', 'Bestandskunde', 'Notiz', 'Datei']];
     var num = function (n) { return n === null || n === undefined ? '' : n.toFixed(2).replace('.', ','); };
     B.contracts.slice().sort(function (a, b) { return a.signed - b.signed; }).forEach(function (c) {
       var k = calc(c);
       rows.push([fmtDate(c.signed), c.custLabel || c.custName, c.custNo, c.offerNo, num(k.prov), k.m.factor === null || k.m.factor === undefined ? '' : deNum(k.m.factor),
-                 num(k.payout), k.m.installed ? 'ja' : 'nein', k.m.billed ? 'ja' : 'nein', k.m.note || '', c.file.name]);
+                 num(k.payout), k.m.installed ? 'ja' : 'nein', k.m.billed ? 'ja' : 'nein', k.existing ? 'ja' : 'nein', k.m.note || '', c.file.name]);
     });
     var csv = '﻿' + rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
     var d = new Date(), name = 'Provisionen_' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '.csv';

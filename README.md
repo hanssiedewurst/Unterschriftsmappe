@@ -107,6 +107,8 @@ In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provisio
 
 **KI-Bundle:** Steht im Angebot eine Zeile wie „Paket L & KI-Bundle“, rechnet die App den KI-Anteil (99, 199 oder 499 €) aus dem Paketpreis heraus: das Paket mit 6 ×, den KI-Anteil mit 4 ×. Die Stufe erkennt sie an der Variante im Angebot (voreingestellt: HalloPetra „Einzelkämpfer“ = 99 €, „Betriebe“ = 199 €, „Mittelstand“ = 499 €; anpassbar unter **Regeln**). Ist sie nicht erkennbar, nimmt die App die kleinste Stufe und markiert den Vertrag mit „prüfen“. Im Vertrag lässt sich die Stufe von Hand wählen. Ein einzeln verkauftes KI-Bundle läuft direkt über die Regel „KI-Bundle“.
 
+**Bestandskunden mit HalloPetra:** Kauft ein Bestandskunde HalloPetra dazu, in der Vertragsansicht unter „Nach Regeln“ das Häkchen **Bestandskunde** setzen. Dann zählt nur der KI-Bundle-Anteil (4 ×, auch wenn er im Paketpreis steckt), alle anderen Positionen stehen auf 0 €. In der Übersicht steht „Bestandskunde“, in der CSV eine eigene Spalte. Findet die App im Angebot kein KI-Bundle, markiert sie den Vertrag mit „prüfen“.
+
 **Regeln:** Über **Provision → Regeln**. Pro Regel: Bereich (monatlich, einmalig, Dienstleistung), ein Textstück aus dem Positionsnamen (leer = alle übrigen), Berechnung (Vielfaches des Betrags, Festbetrag, keine). Es gilt die erste passende Regel von oben. Voreingestellt:
 
 | Bereich | Position enthält | Provision |
