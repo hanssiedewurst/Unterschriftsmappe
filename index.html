@@ -399,6 +399,9 @@ body.shelf-on .shelf {
 .tbl .selc input { width: 19px; height: 19px; accent-color: var(--accent); margin: 0; }
 .yeartbl tr[aria-current] td { font-weight: 600; }
 .yeartbl tfoot td { font-weight: 600; }
+.modmatrix td.zero { color: var(--muted); opacity: .5; }
+.modmatrix th .linkish { font: inherit; text-transform: inherit; letter-spacing: inherit; }
+.small-txt { font-size: 13px; }
 .lagfld { flex-direction: row; align-items: center; gap: 12px; }
 .stat .date-in { margin-top: 6px; }
 .txt.date-in { width: 150px; }
@@ -617,7 +620,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 20</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 21</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2707,6 +2710,7 @@ body.shelf-on .shelf {
     else if (B.view.kind === 'rules') html = viewRules();
     else if (B.view.kind === 'payment') html = viewPayment();
     else if (B.view.kind === 'year') html = viewYear();
+    else if (B.view.kind === 'modules') html = viewModules();
     else html = viewOverview();
     bizEl.innerHTML = html;
     renderLinkList();
@@ -2753,7 +2757,7 @@ body.shelf-on .shelf {
       '<div class="biz-actions">' +
       '<label class="sr" for="yearSel">Jahr</label><select id="yearSel" class="sel">' + years.map(function (y) { return '<option value="' + y + '"' + (y === B.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') +
         (years.length > 1 ? '<option value="0"' + (all ? ' selected' : '') + '>Alle Jahre</option>' : '') + '</select>' +
-      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="yearview">Jahresübersicht</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">CSV</button></div></div>';
+      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="yearview">Jahresübersicht</button><button type="button" class="btn" data-act="modview">Module</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">CSV</button></div></div>';
     h += '<div class="tiles">' +
       tile('Provision', eur(sum(inYear, function (x) { return x.k.prov; })), inYear.length + (inYear.length === 1 ? ' Vertrag' : ' Verträge')) +
       tile('Auszahlung (Faktor bekannt)', eur(sum(withF, function (x) { return x.k.payout; })), withF.length + ' mit Faktor') +
@@ -2833,7 +2837,7 @@ body.shelf-on .shelf {
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Jahresübersicht' }]);
     h += '<div class="biz-top"><div><h1>Jahresübersicht ' + Y + '</h1><p class="sub">Ablauf: Vertrag › Installation › erste Abo-Abrechnung › Provision. „Erwartet“ setzt die Provision ' + lag + (lag === 1 ? ' Monat' : ' Monate') + ' nach dem Installationsmonat an, deshalb landen Verträge vom Jahresende in der Zahlung des Folgejahres. Ändern unter Regeln.</p></div>' +
       '<div class="biz-actions"><label class="sr" for="yYearSel">Jahr</label><select id="yYearSel" class="sel">' + years.map(function (y) { return '<option' + (y === Y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
-      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button></div></div>';
+      '<button type="button" class="btn" data-act="modview">Module</button><button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button></div></div>';
     h += '<div class="tiles">' +
       tile('Verkauft (Provision)', eur(round2(tot.prov)), tot.n + (tot.n === 1 ? ' Vertrag unterschrieben' : ' Verträge unterschrieben')) +
       tile('Erwartet (Auszahlung)', eur(round2(tot.exp)), tot.en + (tot.en === 1 ? ' Vertrag' : ' Verträge') + (tot.enoF ? ', ' + tot.enoF + ' ohne Faktor' : ''), tot.enoF ? 'wait' : '') +
@@ -2846,7 +2850,7 @@ body.shelf-on .shelf {
     rows.forEach(function (r, i) {
       var empty = !r.n && !r.pc && !r.en;
       var diff = r.pc && r.en && !r.enoF ? round2(r.paid - r.exp) : null;
-      h += '<tr' + (empty ? ' class="dim"' : '') + (i === cm && Y === cy ? ' aria-current="true"' : '') + '><td>' + MONTHS[i] + '</td>' +
+      h += '<tr' + (empty ? ' class="dim"' : '') + (i === cm && Y === cy ? ' aria-current="true"' : '') + '><td>' + (r.n ? '<button type="button" class="linkish" data-act="modmonth" data-y="' + Y + '" data-m="' + i + '">' + MONTHS[i] + '</button>' : MONTHS[i]) + '</td>' +
         '<td class="num">' + (r.n || '–') + '</td><td class="num">' + (r.n ? eur(round2(r.prov)) : '–') + '</td>' +
         '<td class="num">' + (r.en ? eur(round2(r.exp)) + ' <span class="muted">(' + r.en + ')</span>' + (r.enoF ? '<br><span class="muted">' + r.enoF + ' ohne Faktor</span>' : '') : '–') + '</td>' +
         '<td class="num">' + (r.pc ? eur(round2(r.paid)) : (i <= cm && i > firstPay ? '<span class="muted">keine Zahlung</span>' : '–')) + '</td>' +
@@ -2855,6 +2859,97 @@ body.shelf-on .shelf {
     h += '</tbody><tfoot><tr><td>Summe ' + Y + '</td><td class="num">' + tot.n + '</td><td class="num">' + eur(round2(tot.prov)) + '</td><td class="num">' + eur(round2(tot.exp)) + '</td><td class="num">' + eur(round2(tot.paid)) + '</td><td></td></tr></tfoot></table></div></div>';
     h += '<p class="sub">„Erwartet“ braucht das Installationsdatum. Es wird gesetzt, wenn du „Installiert“ abhakst, und lässt sich im Vertrag ändern. „Differenz“ erscheint, sobald für den Monat alle Faktoren eingetragen sind.</p>';
     return h;
+  }
+  /* modules sold per month (by signing date) */
+  var SEC_TAB = [['monthly', 'Module (monatlich)'], ['onetime', 'Einmalig'], ['service', 'Dienstleistungen']];
+  function modState() {
+    if (!B.mod) { var d = new Date(); B.mod = { y: d.getFullYear(), m: d.getMonth(), sec: 'monthly' }; }
+    return B.mod;
+  }
+  function moduleStats(Y, M, sec) {
+    var map = new Map(), contracts = [], tot = { qty: 0, value: 0, prov: 0 };
+    B.contracts.forEach(function (c) {
+      if (yearOf(c.signed) !== Y) return;
+      var mi = new Date(c.signed).getMonth();
+      if (M >= 0 && mi !== M) return;
+      var k = calc(c), mods = [];
+      k.lines.forEach(function (l) {
+        var it = l.item; if (it.section !== sec) return;
+        var name = String(it.name || '').replace(/\s*\*+\s*$/, '').trim(); if (!name) return;
+        var gk = name.toLowerCase().replace(/[-–]/g, ' ').replace(/\s+/g, ' ');
+        var a = map.get(gk);
+        if (!a) { a = { name: name, qty: 0, keys: new Set(), value: 0, prov: 0, months: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }; map.set(gk, a); }
+        var q = Number(it.qty) || 1;
+        a.qty += q; a.keys.add(c.key); a.value += it.total || 0; a.prov += l.prov; a.months[mi] += q;
+        tot.qty += q; tot.value += it.total || 0; tot.prov += l.prov;
+        mods.push((q !== 1 ? deNum(q) + ' × ' : '') + name);
+      });
+      contracts.push({ c: c, k: k, mods: mods });
+    });
+    var list = Array.from(map.values()).sort(function (a, b) { return b.keys.size - a.keys.size || b.value - a.value || a.name.localeCompare(b.name, 'de'); });
+    contracts.sort(function (a, b) { return a.c.signed - b.c.signed; });
+    return { list: list, contracts: contracts, tot: tot };
+  }
+  function viewModules() {
+    var st = modState(), Y = st.y, M = st.m, sec = st.sec;
+    var ys = new Set([new Date().getFullYear()]); B.contracts.forEach(function (c) { ys.add(yearOf(c.signed)); });
+    var years = Array.from(ys).sort(function (a, b) { return b - a; });
+    var r = moduleStats(Y, M, sec), per = sec === 'monthly' ? ' /Monat' : '';
+    var title = (M >= 0 ? MONTHS[M] + ' ' : '') + Y;
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Verkaufte Module' }]);
+    h += '<div class="biz-top"><div><h1>Verkaufte Module ' + esc(title) + '</h1><p class="sub">Nach Unterschriftsdatum. Steckt das KI-Bundle im Paketpreis, zählt es als eigenes Modul.</p></div>' +
+      '<div class="biz-actions"><label class="sr" for="modMonth">Monat</label><select id="modMonth" class="sel"><option value="-1"' + (M < 0 ? ' selected' : '') + '>Ganzes Jahr</option>' +
+      MONTHS.map(function (n, i) { return '<option value="' + i + '"' + (i === M ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>' +
+      '<label class="sr" for="modYear">Jahr</label><select id="modYear" class="sel">' + years.map(function (y) { return '<option' + (y === Y ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' +
+      '<button type="button" class="btn" data-act="modcsv">CSV</button></div></div>';
+    h += '<div class="toolbar"><div class="seg" role="group" aria-label="Bereich">' + SEC_TAB.map(function (o) {
+      return '<button type="button" data-act="modsec" data-v="' + o[0] + '" aria-pressed="' + (sec === o[0]) + '">' + o[1] + '</button>';
+    }).join('') + '</div></div>';
+    var nC = r.contracts.length;
+    h += '<div class="tiles">' + tile('Verträge', String(nC), M >= 0 ? 'unterschrieben im ' + MONTHS[M] : 'unterschrieben ' + Y) +
+      tile('Verschiedene Module', String(r.list.length), deNum(r.tot.qty) + ' Stück insgesamt') +
+      tile(sec === 'monthly' ? 'Monatswert' : 'Summe', eur(round2(r.tot.value)), sec === 'monthly' ? 'neue Abo-Umsätze pro Monat' : 'Betrag laut Angeboten') +
+      tile('Provision', eur(round2(r.tot.prov)), 'aus diesen Positionen') + '</div>';
+    if (!r.list.length) return h + '<div class="panel pad-in"><p>' + (nC ? 'In diesem Bereich wurde nichts verkauft.' : 'In diesem Zeitraum gibt es keine unterschriebenen Verträge.') + '</p></div>';
+    if (M >= 0) {
+      h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Modul</th><th class="num">Stück</th><th class="num">Verträge</th><th class="num">' + (sec === 'monthly' ? 'Wert /Monat' : 'Betrag') + '</th><th class="num">Provision</th></tr></thead><tbody>';
+      r.list.forEach(function (a) {
+        h += '<tr' + (a.value || a.prov ? '' : ' class="dim"') + '><td class="wrap">' + esc(a.name) + '</td><td class="num">' + deNum(a.qty) + '</td><td class="num">' + a.keys.size + '</td><td class="num">' + (a.value ? eur(round2(a.value)) : '<span class="muted">inklusive</span>') + '</td><td class="num">' + eur(round2(a.prov)) + '</td></tr>';
+      });
+      h += '</tbody><tfoot><tr><td>Summe</td><td class="num">' + deNum(r.tot.qty) + '</td><td class="num">' + nC + '</td><td class="num">' + eur(round2(r.tot.value)) + '</td><td class="num">' + eur(round2(r.tot.prov)) + '</td></tr></tfoot></table></div></div>';
+      h += '<h2 class="h2">Verträge im ' + MONTHS[M] + '</h2><div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Datum</th><th>Kunde</th><th>Angebot</th><th>Module</th></tr></thead><tbody>';
+      r.contracts.forEach(function (x) {
+        h += '<tr><td>' + fmtDate(x.c.signed) + '</td><td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(x.c.custKey) + '">' + esc(x.c.custLabel || x.c.custName || '') + '</button></td>' +
+          '<td class="brk"><button type="button" class="linkish" data-go="contract:' + esc(x.c.key) + '">' + esc(shortLabel(x.c)) + '</button>' + (x.k.existing ? ' <span class="pill">Bestandskunde</span>' : '') + '</td>' +
+          '<td class="wrap small-txt">' + (x.mods.length ? esc(x.mods.join(', ')) : '<span class="muted">–</span>') + '</td></tr>';
+      });
+      return h + '</tbody></table></div></div>';
+    }
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl modmatrix"><thead><tr><th>Modul</th>' + MONTHS.map(function (n, i) {
+      return '<th class="num"><button type="button" class="linkish" data-act="modmonth" data-y="' + Y + '" data-m="' + i + '">' + n.slice(0, 3) + '</button></th>';
+    }).join('') + '<th class="num">Stück</th><th class="num">Provision</th></tr></thead><tbody>';
+    r.list.forEach(function (a) {
+      h += '<tr><td class="wrap">' + esc(a.name) + '</td>' + a.months.map(function (q) { return '<td class="num' + (q ? '' : ' zero') + '">' + (q ? deNum(q) : '·') + '</td>'; }).join('') +
+        '<td class="num"><strong>' + deNum(a.qty) + '</strong></td><td class="num">' + eur(round2(a.prov)) + '</td></tr>';
+    });
+    return h + '</tbody></table></div></div><p class="sub">Zahlen = verkaufte Stück pro Monat. Auf einen Monat klicken für die Details mit Verträgen.</p>';
+  }
+  function exportModCsv() {
+    var st = modState(), r = moduleStats(st.y, st.m, st.sec);
+    var num = function (n) { return round2(n).toFixed(2).replace('.', ','); };
+    var rows = st.m >= 0 ? [['Modul', 'Stück', 'Verträge', st.sec === 'monthly' ? 'Wert pro Monat' : 'Betrag', 'Provision']]
+      : [['Modul'].concat(MONTHS).concat(['Stück', 'Provision'])];
+    r.list.forEach(function (a) {
+      rows.push(st.m >= 0 ? [a.name, deNum(a.qty), a.keys.size, num(a.value), num(a.prov)] : [a.name].concat(a.months.map(deNum)).concat([deNum(a.qty), num(a.prov)]));
+    });
+    downloadCsv(rows, 'Module_' + st.y + (st.m >= 0 ? '-' + String(st.m + 1).padStart(2, '0') : '') + '_' + st.sec + '.csv');
+  }
+  function downloadCsv(rows, name) {
+    var csv = '﻿' + rows.map(function (r) { return r.map(function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(';'); }).join('\r\n');
+    var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    var a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    toast('Export gestartet: ' + name + '. Öffnet sich direkt in Excel.', { ms: 5000 });
   }
   function shortLabel(c) {
     if (c.offerNo) return c.offerNo;
@@ -3278,6 +3373,10 @@ body.shelf-on .shelf {
     }
     if (act === 'rules') openBiz({ kind: 'rules' });
     else if (act === 'yearview') openBiz({ kind: 'year' });
+    else if (act === 'modview') { modState(); openBiz({ kind: 'modules' }); }
+    else if (act === 'modmonth') { var ms = modState(); ms.y = Number(b.dataset.y); ms.m = Number(b.dataset.m); openBiz({ kind: 'modules' }); }
+    else if (act === 'modsec') { modState().sec = b.dataset.v; renderBiz(); }
+    else if (act === 'modcsv') exportModCsv();
     else if (act === 'filter') { B.filter = b.dataset.v; renderBiz(); }
     else if (act === 'bulk') { B.bulk = !B.bulk; B.sel = new Set(); renderBiz(); }
     else if (act === 'selall') { B.visible.forEach(function (k) { B.sel.add(k); }); renderBiz(); }
@@ -3334,6 +3433,8 @@ body.shelf-on .shelf {
     var t = e.target;
     if (t.id === 'yearSel') { B.year = Number(t.value); B.sel = new Set(); rerender(); return; }
     if (t.id === 'yYearSel') { B.yYear = Number(t.value); rerender(); return; }
+    if (t.id === 'modYear') { modState().y = Number(t.value); rerender(); return; }
+    if (t.id === 'modMonth') { modState().m = Number(t.value); rerender(); return; }
     if (t.id === 'sortSel') { B.sort = t.value; rerender(); return; }
     if (t.dataset && t.dataset.sel) {
       if (t.checked) B.sel.add(t.dataset.sel); else B.sel.delete(t.dataset.sel);
