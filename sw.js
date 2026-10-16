@@ -1,7 +1,7 @@
 /* Offline-Speicher der Unterschriftenmappe.
    Bei jeder Änderung an den App-Dateien VERSION hochzählen (v1 -> v2 ...),
    damit die iPads die neue Fassung abholen. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'unterschriftenmappe-' + VERSION;
 
 const CORE = [
@@ -12,30 +12,17 @@ const CORE = [
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
-  './icons/favicon-64.png'
+  './icons/favicon-64.png',
+  './lib/pdfjs.min.js',
+  './lib/pdfjs.worker.min.js',
+  './lib/pdf-lib.min.js'
 ];
-
-// PDF-Bibliotheken: zuerst eigene Kopien im Ordner lib/, sonst cdnjs.
-const LIBS = [
-  ['./lib/pdf.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'],
-  ['./lib/pdf.worker.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'],
-  ['./lib/pdf-lib.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js']
-];
-
-async function cacheFirstAvailable(cache, urls) {
-  for (const url of urls) {
-    try {
-      const res = await fetch(new Request(url, { mode: 'cors', credentials: 'omit' }));
-      if (res.ok) { await cache.put(url, res); return; }
-    } catch (e) { /* nächste Quelle versuchen */ }
-  }
-}
+// Seltener gebrauchte Dateien in lib/ (Schriftdaten, Bilddecoder) werden beim ersten Gebrauch abgelegt.
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     await cache.addAll(CORE);
-    await Promise.all(LIBS.map((urls) => cacheFirstAvailable(cache, urls)));
     await self.skipWaiting();
   })());
 });
@@ -49,7 +36,7 @@ self.addEventListener('activate', (event) => {
 });
 
 function cacheable(url) {
-  return url.origin === self.location.origin || url.hostname === 'cdnjs.cloudflare.com';
+  return url.origin === self.location.origin;
 }
 
 self.addEventListener('fetch', (event) => {
