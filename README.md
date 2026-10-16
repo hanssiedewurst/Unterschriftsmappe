@@ -88,7 +88,18 @@ Web-Apps können sich auf dem iPad leider nicht selbst ins Teilen-Menü eintrage
 
 ---
 
-## 7. Grenzen der aktuellen Version
+## 7. Fehlersuche auf dem iPad
+
+Wenn die App eine Unterschriftsstelle nicht erkennt, zeigt der Diagnose-Modus, was sie im PDF gefunden hat:
+
+- **In Safari:** die Adresse mit `#diagnose` am Ende öffnen, also `https://hanssiedewurst.github.io/Unterschriftsmappe/#diagnose`.
+- **In der App vom Home-Bildschirm:** fünfmal schnell auf den blauen Schriftzug „UNTERSCHRIFTENMAPPE“ oben links tippen.
+
+Danach das Beispiel oder ein eigenes PDF öffnen. Unten erscheint ein Bericht. Mit **Text kopieren** lässt er sich in eine Nachricht einfügen.
+
+---
+
+## 8. Grenzen der aktuellen Version
 
 - Passwortgeschützte oder gegen Bearbeitung gesperrte PDFs werden abgelehnt.
 - Die automatische Erkennung braucht echten Text im PDF. Bei eingescannten Verträgen die Stelle über **Hinzufügen** → **Unterschrift** festlegen.

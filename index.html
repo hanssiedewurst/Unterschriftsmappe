@@ -330,6 +330,19 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
 .ready-name { word-break: break-all; color: var(--muted); font-size: 13.5px; }
 .ready-hint { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 46ch; }
 .ready-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.diag {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 65; max-height: 70vh;
+  display: flex; flex-direction: column; gap: 10px;
+  padding-top: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: var(--surface); border-top: 2px solid var(--accent); box-shadow: var(--shadow);
+}
+.diag-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.diag-head strong { flex: 1; font-size: 16px; }
+.diag pre {
+  margin: 0; overflow: auto; min-height: 0; flex: 1; padding: 10px; border-radius: 8px;
+  background: var(--surface-2); color: var(--ink); font: 12px/1.45 var(--f-mono); white-space: pre-wrap; word-break: break-word;
+}
 
 @media (max-width: 520px) {
   .btn { padding: 0 11px; font-size: 14px; }
@@ -374,7 +387,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
 
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 3</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 4</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -437,6 +450,15 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
       <button class="btn primary" type="submit">Übernehmen</button>
     </div>
   </form>
+</div>
+
+<div class="diag" id="diag" role="dialog" aria-labelledby="diagTitle" hidden>
+  <div class="diag-head">
+    <strong id="diagTitle">Diagnose</strong>
+    <button class="btn" type="button" id="diagCopy">Text kopieren</button>
+    <button class="btn" type="button" id="diagClose">Schließen</button>
+  </div>
+  <pre id="diagText"></pre>
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button type="button" id="toastAct" hidden></button></div>
@@ -510,7 +532,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
   async function addDoc(name, bytes) {
     var probe = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
     if (probe.isEncrypted) { var err = new Error('encrypted'); err.code = 'encrypted'; throw err; }
-    var pdf = await pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false, cMapUrl: LIB + 'cmaps/', cMapPacked: true, standardFontDataUrl: LIB + 'standard_fonts/', wasmUrl: LIB + 'wasm/' }).promise;
+    var pdf = await pdfjsLib.getDocument({ data: bytes.slice(), isEvalSupported: false, cMapUrl: LIB + 'cmaps/', cMapPacked: true, standardFontDataUrl: LIB + 'standard_fonts/' }).promise;
     var d = { id: nid('d'), name: name, bytes: bytes, pdf: pdf };
     S.docs.push(d);
     for (var i = 0; i < pdf.numPages; i++) {
@@ -543,6 +565,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     }
     busy(false);
     rebuild();
+    showDiag();
     if (failed.length) { toast(failed[0], { ms: 6500 }); return; }
     if (showDetectErrors()) return;
     if (added) {
@@ -556,6 +579,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     S.pages.forEach(function (p) { if (p.task) { try { p.task.cancel(); } catch (e) {} } });
     S.docs.forEach(function (d) { try { d.pdf.destroy(); } catch (e) {} });
     S.docs = []; S.pages = []; S.zones = []; S.fields = []; S.selected = null; S.isSample = false;
+    diagLog = []; diagErrors = [];
   }
 
   /* ---------- signature spot detection ---------- */
@@ -585,11 +609,17 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
   function noteDetectError(step, e) {
     console.warn('Erkennung (' + step + ')', e);
     detectErrors.push(step + ': ' + ((e && e.message) || e));
+    diagErrors.push(step + ': ' + ((e && e.name) || '') + ' ' + ((e && e.message) || e) + (e && e.stack ? ' @ ' + String(e.stack).split('\n')[1] : ''));
   }
+  var DIAG = /(^|#)diagnose$/i.test(location.hash);
+  var diagLog = [];
   async function detect(p, page) {
     var vp = p.vp1, found = [];
+    var dg = DIAG ? { doc: (docOf(p) || {}).name, page: p.index + 1, rotation: vp.rotation, annots: 0, items: 0, first: [], hits: [], rejected: [], zones: 0 } : null;
+    if (dg) diagLog.push(dg);
     var annots = [];
     try { annots = await page.getAnnotations({ intent: 'display' }); } catch (e) { noteDetectError('Formularfelder', e); }
+    if (dg) dg.annots = annots.map(function (a) { return (a.fieldType || a.subtype) + (a.fieldName ? ':' + a.fieldName : ''); });
     annots.forEach(function (a) { try {
       if (a.subtype !== 'Widget' || !a.rect) return;
       if (a.fieldType === 'Sig') {
@@ -614,12 +644,17 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     var tc = { items: [] };
     try { tc = await page.getTextContent(); } catch (e) { noteDetectError('Text', e); }
     var items = tc.items.filter(function (it) { return typeof it.str === 'string' && it.str.trim() && it.transform; });
+    if (dg) { dg.items = items.length; dg.first = items.slice(0, 6).map(function (it) { return it.str; }); }
+    var why = function (it, reason) {
+      if (dg && /unterschr|unterzeich|signat/i.test(it.str)) dg.rejected.push(JSON.stringify(it.str.slice(0, 70)) + ' → ' + reason);
+    };
     items.forEach(function (it, idx) { try {
       var s = it.str.trim();
-      if (s.length > 60) return;
-      if (!(KEY_START.test(s) || KEY_ORT.test(s))) return;
+      if (s.length > 60) { why(it, 'zu lang (Fließtext)'); return; }
+      if (!(KEY_START.test(s) || KEY_ORT.test(s))) { why(it, 'steht nicht am Anfang'); return; }
       var t = it.transform;
-      if (Math.abs(t[1]) > 0.01 || Math.abs(t[2]) > 0.01) return; // only horizontal text
+      if (Math.abs(t[1]) > 0.01 || Math.abs(t[2]) > 0.01) { why(it, 'gedrehter Text'); return; } // only horizontal text
+      if (dg) dg.hits.push(JSON.stringify(s) + ' x=' + Math.round(t[4]) + ' y=' + Math.round(t[5]) + ' h=' + Math.round(Math.abs(t[3])) + ' w=' + Math.round(it.width || 0));
       var fh = Math.abs(t[3]) || 10, x = t[4], y = t[5];
       var w = it.width || s.length * fh * 0.5, rect;
       var m = it.str.search(FILL);
@@ -648,6 +683,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
       if (dup) return;
       S.zones.push({ id: nid('z'), pageId: p.id, x: f.x, y: f.y, w: f.w, h: f.h, label: f.label, source: f.source, sig: null,
                      orig: { x: f.x, y: f.y, w: f.w, h: f.h } });
+      if (dg) dg.zones++;
     });
   }
 
@@ -714,8 +750,51 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
     } catch (e) { console.error(e); toast('Das Beispiel konnte nicht erzeugt werden.'); }
     busy(false);
     rebuild();
+    showDiag();
     showDetectErrors();
   }
+  var diagErrors = [];
+  function showDiag() {
+    if (!DIAG) return;
+    var lines = [
+      'Unterschriftenmappe Version 4 · Diagnose',
+      'Browser: ' + navigator.userAgent,
+      'pdf.js: ' + ((window.pdfjsLib && pdfjsLib.version) || '?') + ' · pdf-lib: ' + (window.PDFLib ? 'geladen' : 'fehlt'),
+      'Seiten gesamt: ' + S.pages.length + ' · Unterschriftsstellen: ' + S.zones.length + ' · Formularfelder: ' + S.fields.length,
+      ''
+    ];
+    diagLog.forEach(function (d) {
+      lines.push('▸ ' + d.doc + ' · Seite ' + d.page + (d.rotation ? ' (gedreht ' + d.rotation + '°)' : ''));
+      lines.push('  PDF-Felder: ' + (d.annots.length ? d.annots.join(', ') : 'keine'));
+      lines.push('  Textstücke: ' + d.items + (d.first.length ? ' · Anfang: ' + d.first.map(function (x) { return JSON.stringify(x.slice(0, 40)); }).join(' | ') : ''));
+      lines.push('  Treffer: ' + (d.hits.length ? d.hits.join(' ; ') : 'keine'));
+      if (d.rejected.length) lines.push('  Verworfen: ' + d.rejected.join(' ; '));
+      lines.push('  → Stellen angelegt: ' + d.zones);
+    });
+    if (diagErrors.length) { lines.push(''); lines.push('Fehler:'); diagErrors.forEach(function (e) { lines.push('  ' + e); }); }
+    $('#diagText').textContent = lines.join('\n');
+    $('#diag').hidden = false;
+  }
+  $('#diagClose').addEventListener('click', function () { $('#diag').hidden = true; });
+  $('#diagCopy').addEventListener('click', function () {
+    var t = $('#diagText').textContent;
+    var done = function () { toast('Diagnose kopiert. Jetzt in den Chat einfügen.'); };
+    var fallback = function () {
+      var r = document.createRange(); r.selectNodeContents($('#diagText'));
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      toast('Text ist markiert. Über „Kopieren“ übernehmen.');
+    };
+    try { navigator.clipboard.writeText(t).then(done, fallback); } catch (e) { fallback(); }
+  });
+  // five quick taps on the app name switch the diagnosis on (handy in the home-screen app)
+  (function () {
+    var n = 0, t0 = 0;
+    $('.brand-name').addEventListener('click', function () {
+      var now = Date.now(); n = (now - t0 < 600) ? n + 1 : 1; t0 = now;
+      if (n >= 5) { n = 0; DIAG = true; toast('Diagnose an. Jetzt ein PDF öffnen oder das Beispiel laden.', { ms: 5000 }); }
+    });
+  })();
+
   function showDetectErrors() {
     if (!detectErrors.length) return false;
     var msg = 'Hinweis: Die Erkennung hatte ein Problem (' + detectErrors[0].slice(0, 140) + '). Stellen bei Bedarf über „Hinzufügen“ setzen.';
@@ -1584,7 +1663,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
   });
   viewBtn.addEventListener('click', function () { setView(S.view === 'organize' ? 'pages' : 'organize'); });
   nextBtn.addEventListener('click', goNext);
-  $('#sampleBtn').addEventListener('click', loadSample);
+  $('#sampleBtn').addEventListener('click', function () { loadSample(); });
   clearBtn.addEventListener('click', function () {
     armConfirm(clearBtn, 'Wirklich leeren?', function () {
       setView('pages'); resetAll(); rebuild(); toast('Alle Dokumente geschlossen.');
@@ -1619,10 +1698,10 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
   // The worker becomes a same-origin blob, so it also starts offline from the cache.
   async function workerUrl() {
     try {
-      var r = await fetch(LIB + 'pdfjs.worker.min.js');
+      var r = await fetch(LIB + 'pdf.worker.min.js');
       if (r.ok) { var t = await r.text(); return URL.createObjectURL(new Blob([t], { type: 'text/javascript' })); }
     } catch (e) {}
-    return LIB + 'pdfjs.worker.min.js';
+    return LIB + 'pdf.worker.min.js';
   }
   function fatal(msg) {
     busy(false);
@@ -1634,7 +1713,7 @@ body.placing .page { outline: 2px dashed var(--accent); outline-offset: 5px; }
   async function boot() {
     busy(true, 'Wird gestartet …');
     try {
-      window.pdfjsLib = await import(LIB + 'pdfjs.min.js');
+      await loadScript(LIB + 'pdf.min.js');
       await loadScript(LIB + 'pdf-lib.min.js');
     } catch (e) {
       console.error(e);

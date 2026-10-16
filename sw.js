@@ -1,7 +1,7 @@
 /* Offline-Speicher der Unterschriftenmappe.
    Bei jeder Änderung an den App-Dateien VERSION hochzählen (v1 -> v2 ...),
    damit die iPads die neue Fassung abholen. */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = 'unterschriftenmappe-' + VERSION;
 
 const CORE = [
@@ -13,8 +13,8 @@ const CORE = [
   './icons/icon-maskable-512.png',
   './icons/apple-touch-icon.png',
   './icons/favicon-64.png',
-  './lib/pdfjs.min.js',
-  './lib/pdfjs.worker.min.js',
+  './lib/pdf.min.js',
+  './lib/pdf.worker.min.js',
   './lib/pdf-lib.min.js'
 ];
 // Seltener gebrauchte Dateien in lib/ (Schriftdaten, Bilddecoder) werden beim ersten Gebrauch abgelegt.
