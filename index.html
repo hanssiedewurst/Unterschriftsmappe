@@ -417,6 +417,12 @@ body.shelf-on .shelf {
   background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
 }
 .copybox .k { font-size: 12.5px; color: var(--muted); }
+.payform { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end; }
+.payform .fld { min-width: 0; }
+.payform .grow2 { flex: 1 1 220px; }
+.txt.big { font-size: 18px; width: 180px; font-variant-numeric: tabular-nums; }
+.combo-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.pill.okp { background: var(--ok-wash); color: var(--ok); }
 .linkbox { border-color: var(--ok); background: var(--ok-wash); }
 .linkbox p, .warnbox p { margin: 0; max-width: 75ch; }
 .linkpick { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -594,7 +600,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 12</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 13</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2248,7 +2254,7 @@ body.shelf-on .shelf {
 
   /* data file in the OneDrive folder */
   async function loadData() {
-    B.data = { rules: clone(DEFAULT_RULES), contracts: {}, ki: clone(DEFAULT_KI) };
+    B.data = { rules: clone(DEFAULT_RULES), contracts: {}, ki: clone(DEFAULT_KI), payments: [] };
     B.dataOk = true;
     try {
       var fh = await F.outDir.getFileHandle(DATA_FILE);
@@ -2256,6 +2262,7 @@ body.shelf-on .shelf {
       if (d && typeof d === 'object') {
         if (Array.isArray(d.rules) && d.rules.length) B.data.rules = d.rules;
         if (d.contracts && typeof d.contracts === 'object') B.data.contracts = d.contracts;
+        if (Array.isArray(d.payments)) B.data.payments = d.payments;
         if (d.ki && Array.isArray(d.ki.tiers) && Array.isArray(d.ki.variants)) {
           B.data.ki = d.ki;
           if (!d.kiVersion || d.kiVersion < 2) {
@@ -2288,7 +2295,7 @@ body.shelf-on .shelf {
         var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
         var w = await fh.createWritable();
         await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
-                                       rulesVersion: 2, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts }, null, 2));
+                                       rulesVersion: 2, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments }, null, 2));
         await w.close();
       } catch (e) {
         console.warn(e);
@@ -2608,6 +2615,7 @@ body.shelf-on .shelf {
     } else if (B.view.kind === 'contract') html = viewContract();
     else if (B.view.kind === 'customer') html = viewCustomer();
     else if (B.view.kind === 'rules') html = viewRules();
+    else if (B.view.kind === 'payment') html = viewPayment();
     else html = viewOverview();
     bizEl.innerHTML = html;
     renderLinkList();
@@ -2632,12 +2640,16 @@ body.shelf-on .shelf {
     var h = '<div class="biz-top"><div><h1>Provision ' + B.year + '</h1><p class="sub">Gezählt ab Unterschrift. Auszahlung = Provision × Faktor.</p></div>' +
       '<div class="biz-actions">' +
       (years.length > 1 ? '<label class="sr" for="yearSel">Jahr</label><select id="yearSel" class="sel">' + years.map(function (y) { return '<option' + (y === B.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') + '</select>' : '') +
-      '<button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">Als CSV exportieren</button></div></div>';
+      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">Als CSV exportieren</button></div></div>';
     h += '<div class="tiles">' +
       tile('Provision', eur(sum(list, function (x) { return x.k.prov; })), list.length + (list.length === 1 ? ' Vertrag' : ' Verträge')) +
       tile('Auszahlung (Faktor bekannt)', eur(sum(withF, function (x) { return x.k.payout; })), withF.length + ' mit Faktor') +
       tile('Faktor offen', noF.length + (noF.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(noF, function (x) { return x.k.prov; })) + ' Provision', noF.length ? 'wait' : '') +
       tile('Noch nicht abgerechnet', notBilled.length + (notBilled.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(notBilled, function (x) { return x.k.payout !== null ? x.k.payout : x.k.prov; })) + ' offen') +
+      (function () {
+        var pays = (B.data.payments || []).filter(function (pp) { return String(pp.date || '').slice(0, 4) === String(B.year); });
+        return tile('Eingegangen', eur(round2(pays.reduce(function (a, pp) { return a + (pp.amount || 0); }, 0))), pays.length + (pays.length === 1 ? ' Zahlung' : ' Zahlungen'));
+      })() +
       '</div>';
     if (!list.length) return h + '<div class="panel pad-in"><p>In diesem Jahr gibt es noch keine unterschriebenen Verträge.</p></div>';
     h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr>' +
@@ -2849,6 +2861,128 @@ body.shelf-on .shelf {
     return h + '</tbody></table></div></div>';
   }
 
+  /* matching received commission payments */
+  var PAY_TOL = 2; // differences up to 2 € count as rounding
+  function isoToday() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function isoToDmy(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? m[3] + '.' + m[2] + '.' + m[1] : (iso || ''); }
+  function findCombos(target) {
+    var cands = B.contracts.map(function (c) { return { c: c, k: calc(c) }; })
+      .filter(function (x) { return x.k.mode !== 'none' && !x.k.m.billed && x.k.prov > 0; })
+      .map(function (x) {
+        var known = x.k.payout !== null;
+        return { c: x.c, k: x.k, known: known, lo: known ? x.k.payout : round2(x.k.prov * 0.6), hi: known ? x.k.payout : round2(x.k.prov * 1.2) };
+      })
+      .sort(function (a, b) { return b.hi - a.hi; });
+    var n = cands.length, sufHi = new Array(n + 1).fill(0);
+    for (var i = n - 1; i >= 0; i--) sufHi[i] = sufHi[i + 1] + cands[i].hi;
+    var found = [], nodes = 0, LIMIT = 300000, chosen = [];
+    (function dfs(start, lo, hi) {
+      if (++nodes > LIMIT || found.length > 400) return;
+      if (chosen.length && target >= lo - PAY_TOL && target <= hi + PAY_TOL) found.push(chosen.slice());
+      for (var j = start; j < n; j++) {
+        if (hi + sufHi[j] + PAY_TOL < target) break;
+        if (lo + cands[j].lo - PAY_TOL > target) continue;
+        chosen.push(j); dfs(j + 1, lo + cands[j].lo, hi + cands[j].hi); chosen.pop();
+      }
+    })(0, 0, 0);
+    var res = found.map(function (ix) {
+      var items = ix.map(function (i) { return cands[i]; });
+      var unk = items.filter(function (x) { return !x.known; });
+      var knownSum = round2(items.filter(function (x) { return x.known; }).reduce(function (a, x) { return a + x.lo; }, 0));
+      var factor = null, total = knownSum;
+      if (unk.length) {
+        var unkProv = unk.reduce(function (a, x) { return a + x.k.prov; }, 0);
+        factor = Math.min(1.2, Math.max(0.6, Math.round(((target - knownSum) / unkProv) * 1000) / 1000));
+        total = round2(knownSum + unk.reduce(function (a, x) { return a + round2(x.k.prov * factor); }, 0));
+      }
+      return { items: items, unknown: unk.length, factor: factor, total: total, diff: round2(target - total),
+               oldest: Math.min.apply(null, items.map(function (x) { return x.c.signed; })) };
+    }).filter(function (r) { return Math.abs(r.diff) <= PAY_TOL + 0.001; });
+    res.sort(function (a, b) {
+      return (a.unknown > 0) - (b.unknown > 0) || a.unknown - b.unknown || Math.abs(a.diff) - Math.abs(b.diff) || a.items.length - b.items.length || a.oldest - b.oldest;
+    });
+    return { results: res.slice(0, 8), more: Math.max(0, res.length - 8), candidates: n, cut: nodes > LIMIT };
+  }
+  function applyCombo(r) {
+    var p = B.pay;
+    var pay = { id: 'P' + Date.now(), date: p.date || isoToday(), amount: p.amount, note: p.note || '', contracts: [], factorsSet: [], installedSet: [] };
+    var when = new Date((pay.date || isoToday()) + 'T12:00:00').getTime();
+    r.items.forEach(function (x) {
+      var m = meta(x.c);
+      if (!x.known && r.factor !== null) { m.factor = r.factor; pay.factorsSet.push(x.c.key); }
+      if (!m.installed) { m.installed = true; m.installedAt = when; pay.installedSet.push(x.c.key); }
+      m.billed = true; m.billedAt = when; m.paymentId = pay.id;
+      pay.contracts.push(x.c.key);
+    });
+    B.data.payments.push(pay);
+    saveData();
+    B.pay = { amount: null, date: isoToday(), note: '', result: null };
+    toast('Zahlung über ' + eur(pay.amount) + ' zugeordnet: ' + pay.contracts.length + (pay.contracts.length === 1 ? ' Vertrag' : ' Verträge') + ' abgerechnet.', { ms: 6000 });
+  }
+  function undoPayment(id) {
+    var i = B.data.payments.findIndex(function (pp) { return pp.id === id; });
+    if (i < 0) return;
+    var pay = B.data.payments[i];
+    (pay.contracts || []).forEach(function (key) {
+      var m = B.data.contracts[key]; if (!m) return;
+      if (m.paymentId === pay.id) { m.billed = false; m.billedAt = null; delete m.paymentId; }
+      if ((pay.factorsSet || []).indexOf(key) >= 0) m.factor = null;
+      if ((pay.installedSet || []).indexOf(key) >= 0) { m.installed = false; m.installedAt = null; }
+    });
+    B.data.payments.splice(i, 1);
+    saveData();
+    toast('Zahlung entfernt, die Verträge sind wieder offen.');
+  }
+  function payRow(x, factor) {
+    var f = x.known ? x.k.m.factor : factor, out = x.known ? x.k.payout : round2(x.k.prov * factor);
+    return '<tr><td>' + fmtDate(x.c.signed) + '</td><td class="wrap">' + esc(x.c.custLabel || x.c.custName || '') + (x.c.custNo ? '<br><span class="muted small">KD ' + esc(x.c.custNo) + '</span>' : '') + '</td>' +
+      '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(x.c.key) + '">' + esc(shortLabel(x.c)) + '</button>' +
+      (x.k.m.installed ? '' : ' <span class="pill wait">nicht installiert</span>') + '</td>' +
+      '<td class="num">' + eur(x.k.prov) + '</td><td class="num">' + (x.known ? deNum(f) : '<span class="pill wait">wäre ' + deNum(f) + '</span>') + '</td><td class="num">' + eur(out) + '</td></tr>';
+  }
+  function viewPayment() {
+    var p = B.pay || (B.pay = { amount: null, date: isoToday(), note: '', result: null });
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Zahlung eintragen' }]);
+    h += '<div class="biz-top"><div><h1>Gezahlte Provision zuordnen</h1><p class="sub">Trag den erhaltenen Betrag ein. Die App sucht unter allen noch nicht abgerechneten Verträgen eine passende Kombination, auch unter denen, die nicht als installiert markiert sind. Abweichungen bis ' + PAY_TOL + ' € gelten als Rundung.</p></div></div>';
+    h += '<div class="panel pad-in"><div class="payform">' +
+      '<label class="fld"><span>Betrag (€)</span><input id="payAmount" class="txt big" type="text" inputmode="decimal" autocomplete="off" placeholder="z. B. 2.694,56" value="' + esc(p.amount === null || p.amount === undefined ? '' : deNum(p.amount.toFixed(2))) + '"></label>' +
+      '<label class="fld"><span>Eingang am</span><input id="payDate" class="txt" type="date" value="' + esc(p.date || isoToday()) + '"></label>' +
+      '<label class="fld grow2"><span>Notiz (optional)</span><input id="payNote" class="txt" type="text" autocomplete="off" placeholder="z. B. Gutschrift Oktober" value="' + esc(p.note || '') + '"></label>' +
+      '<button type="button" class="btn primary" data-act="paysearch">Passende Verträge suchen</button></div></div>';
+    if (p.result) {
+      var r = p.result;
+      if (!r.results.length) {
+        h += '<div class="panel pad-in warnbox"><p><strong>Keine passende Kombination gefunden</strong> unter ' + r.candidates + ' offenen Verträgen. Prüfe, ob Faktoren falsch eingetragen sind, ein Vertrag schon als abgerechnet markiert ist oder eine manuelle Provision nicht stimmt.</p>' +
+          '<p style="margin-top:10px"><button type="button" class="btn small" data-act="paysave">Zahlung ohne Zuordnung speichern</button></p></div>';
+      } else {
+        r.results.forEach(function (res, i) {
+          var head = 'Vorschlag ' + (i + 1) + ' · ' + res.items.length + (res.items.length === 1 ? ' Vertrag' : ' Verträge') + ' · Summe ' + eur(res.total);
+          var tag = res.unknown ? '<span class="pill wait">Faktor offen, ergibt ' + deNum(res.factor) + '</span>'
+            : Math.abs(res.diff) < 0.005 ? '<span class="pill okp">passt exakt</span>' : '<span class="pill okp">Rundung ' + (res.diff > 0 ? '+' : '') + eur(res.diff) + '</span>';
+          h += '<div class="panel combo"><div class="combo-head"><div><strong>' + esc(head) + '</strong> ' + tag + '</div>' +
+            '<button type="button" class="btn small primary" data-act="payapply" data-i="' + i + '">Diese Zuordnung übernehmen</button></div>' +
+            '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Datum</th><th>Kunde</th><th>Angebot</th><th class="num">Provision</th><th class="num">Faktor</th><th class="num">Auszahlung</th></tr></thead><tbody>' +
+            res.items.map(function (x) { return payRow(x, res.factor); }).join('') + '</tbody></table></div></div>';
+        });
+        if (r.more) h += '<p class="sub">Es gibt ' + r.more + ' weitere mögliche Kombinationen. Je mehr Faktoren eingetragen sind, desto eindeutiger wird die Suche.</p>';
+        h += '<p class="sub"><button type="button" class="linkish" data-act="paysave">Keiner passt: Zahlung ohne Zuordnung speichern</button></p>';
+      }
+    }
+    var pays = (B.data.payments || []).slice().sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
+    h += '<h2 class="h2">Bisherige Zahlungen</h2>';
+    if (!pays.length) return h + '<div class="panel pad-in"><p>Noch keine Zahlungen eingetragen.</p></div>';
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Eingang</th><th class="num">Betrag</th><th>Verträge</th><th>Notiz</th><th></th></tr></thead><tbody>';
+    pays.forEach(function (pp) {
+      var names = (pp.contracts || []).map(function (key) {
+        var c = B.contracts.find(function (x) { return x.key === key; });
+        return c ? '<button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> <span class="muted">' + esc(c.custLabel || c.custName || '') + '</span>' : '<span class="muted">' + esc(key.replace(/^[AF]:/, '')) + '</span>';
+      });
+      h += '<tr><td>' + esc(isoToDmy(pp.date)) + '</td><td class="num">' + eur(pp.amount) + '</td><td class="wrap">' + (names.length ? names.join('<br>') : '<span class="pill warn">nicht zugeordnet</span>') + '</td>' +
+        '<td class="wrap">' + esc(pp.note || '') + '</td><td><button type="button" class="btn small danger" data-act="payundo" data-id="' + esc(pp.id) + '">Aufheben</button></td></tr>';
+    });
+    return h + '</tbody></table></div></div>';
+  }
+
   /* interaction in the main area */
   function rerender() { setTimeout(function () { renderBiz(); renderCustomers(); }, 0); }
   bizEl.addEventListener('click', function (e) {
@@ -2861,6 +2995,31 @@ body.shelf-on .shelf {
     }
     var b = e.target.closest('[data-act]'); if (!b) return;
     var act = b.dataset.act, rules = B.data.rules, idx = Number(b.dataset.i);
+    if (act === 'paynew') { B.pay = B.pay || { amount: null, date: isoToday(), note: '', result: null }; openBiz({ kind: 'payment' }); var pa = $('#payAmount'); if (pa) pa.focus(); return; }
+    if (act === 'paysearch') {
+      var amt = parseNum($('#payAmount').value);
+      if (amt === null || isNaN(amt) || amt <= 0) { toast('Bitte den erhaltenen Betrag eintragen, z. B. 2.694,56.'); return; }
+      B.pay.amount = round2(amt); B.pay.date = $('#payDate').value || isoToday(); B.pay.note = $('#payNote').value.trim();
+      B.pay.result = findCombos(B.pay.amount);
+      renderBiz();
+      return;
+    }
+    if (act === 'payapply') {
+      var res = B.pay && B.pay.result && B.pay.result.results[Number(b.dataset.i)];
+      if (!res) return;
+      armConfirm(b, 'Wirklich übernehmen?', function () { applyCombo(res); renderBiz(); renderCustomers(); });
+      return;
+    }
+    if (act === 'paysave') {
+      if (!B.pay || !B.pay.amount) return;
+      B.data.payments.push({ id: 'P' + Date.now(), date: B.pay.date || isoToday(), amount: B.pay.amount, note: B.pay.note || '', contracts: [], factorsSet: [], installedSet: [] });
+      saveData(); B.pay = { amount: null, date: isoToday(), note: '', result: null };
+      toast('Zahlung ohne Zuordnung gespeichert.'); renderBiz(); return;
+    }
+    if (act === 'payundo') {
+      armConfirm(b, 'Wirklich aufheben?', function () { undoPayment(b.dataset.id); renderBiz(); renderCustomers(); });
+      return;
+    }
     if (act === 'linkpick') { B.linkPick = B.linkPick === b.dataset.key ? null : b.dataset.key; B.linkQ = ''; renderBiz(); var ls = $('#linkSearch'); if (ls) ls.focus(); return; }
     if (act === 'link') {
       var ce = B.contracts.find(function (x) { return x.key === B.linkPick; }), en = F.entries[Number(b.dataset.i)];
@@ -2976,6 +3135,7 @@ body.shelf-on .shelf {
     if (e.target.id === 'linkSearch') { B.linkQ = e.target.value; renderLinkList(); }
   });
   bizEl.addEventListener('keydown', function (e) {
+    if ((e.target.id === 'payAmount' || e.target.id === 'payNote') && e.key === 'Enter') { e.preventDefault(); var ps = bizEl.querySelector('[data-act="paysearch"]'); if (ps) ps.click(); }
     if (e.target.id === 'custNoInput' && e.key === 'Enter') { e.preventDefault(); var sb = bizEl.querySelector('[data-act="saveno"]'); if (sb) sb.click(); }
     if (e.target.id === 'custNoInput' && e.key === 'Escape' && B.editNo) { B.editNo = null; renderBiz(); }
   });

@@ -121,9 +121,16 @@ In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provisio
 
 Unten auf der Regel-Seite steht jede Position aus deinen Verträgen mit der Regel, die für sie gilt. So sieht man sofort, wenn ein neues Produkt eine eigene Regel braucht.
 
+**Gezahlte Provision zuordnen:** In der Übersicht auf **Zahlung eintragen** klicken, den erhaltenen Betrag und das Eingangsdatum eintragen und **Passende Verträge suchen**. Die App sucht unter allen Verträgen, die noch nicht abgerechnet sind, eine Kombination, deren Auszahlungen zusammen den Betrag ergeben. Verträge ohne Häkchen bei „Installiert“ sind mit dabei. Abweichungen bis 2 € gelten als Rundung.
+- Vorschläge, bei denen alle Faktoren schon eingetragen sind, stehen oben.
+- Fehlt bei Verträgen der Faktor, rechnet die App mit 0,6 bis 1,2 und zeigt, welcher Faktor sich aus der Zahlung ergäbe („wäre 0,9“).
+- **Diese Zuordnung übernehmen** hakt die Verträge als abgerechnet ab (mit dem Eingangsdatum), trägt fehlende Faktoren ein und setzt vergessene „Installiert“-Häkchen.
+- Unten stehen alle bisherigen Zahlungen. **Aufheben** macht eine Zuordnung samt der dabei gesetzten Faktoren und Häkchen rückgängig.
+- Passt nichts, lässt sich die Zahlung auch ohne Zuordnung speichern. Die Kachel **Eingegangen** zeigt die Summe der Zahlungen im Jahr.
+
 **Eingescannte Verträge:** Ein Scan enthält keinen Text, die App kann daraus also weder Kunde noch Preise lesen. Solche Verträge stehen in der Übersicht mit „Scan“. In der Vertragsansicht auf **Original-Angebot verknüpfen** klicken und das digitale Angebot aus dem Angebote-Ordner wählen. Kunde, Kundennummer, Positionen und Provision kommen dann exakt aus dem Original, das unterschriebene Dokument bleibt der Scan. Das Original gilt danach in der Angebotsliste als unterschrieben. Die Verknüpfung lässt sich jederzeit wieder lösen.
 
-**Wo die Daten liegen:** Faktoren, Häkchen, Notizen und Regeln speichert die App in der Datei `_Unterschriftenmappe-Daten.json` im Ablageordner. OneDrive sichert und synchronisiert sie mit. Bitte nicht löschen, sonst sind die eingetragenen Faktoren weg.
+**Wo die Daten liegen:** Faktoren, Häkchen, Notizen, Zahlungen und Regeln speichert die App in der Datei `_Unterschriftenmappe-Daten.json` im Ablageordner. OneDrive sichert und synchronisiert sie mit. Bitte nicht löschen, sonst sind die eingetragenen Faktoren weg.
 
 ---
 
