@@ -103,7 +103,9 @@ Im Ordnermodus liest die App alle PDFs aus dem Ablageordner für Unterschriebene
 - Vermerk *Faktor offen*, und *prüfen*, wenn die gelesenen Positionen nicht zur Gesamtsumme im Angebot passen
 - **Als CSV exportieren** öffnet sich direkt in Excel
 
-In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provision. Dort lässt sich die Provision bei Bedarf auch manuell überschreiben, und es gibt ein Notizfeld.
+In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provision, dazu ein Notizfeld. Mit dem Schalter **Nach Regeln / Manuell / Keine** setzt du die Provision eines Vertrags auf einen eigenen Betrag oder auf 0 €. In der Übersicht steht dann „manuell“ bzw. „keine Provision“.
+
+**KI-Bundle:** Steht im Angebot eine Zeile wie „Paket L & KI-Bundle“, rechnet die App den KI-Anteil (99, 199 oder 499 €) aus dem Paketpreis heraus: das Paket mit 6 ×, den KI-Anteil mit 4 ×. Die Stufe erkennt sie an der Variante im Angebot (voreingestellt: „Einzelkämpfer“ = 99 €; weitere Varianten unter **Regeln** eintragen). Ist sie nicht erkennbar, nimmt die App die kleinste Stufe und markiert den Vertrag mit „prüfen“. Im Vertrag lässt sich die Stufe von Hand wählen. Ein einzeln verkauftes KI-Bundle läuft direkt über die Regel „KI-Bundle“.
 
 **Regeln:** Über **Provision → Regeln**. Pro Regel: Bereich (monatlich, einmalig, Dienstleistung), ein Textstück aus dem Positionsnamen (leer = alle übrigen), Berechnung (Vielfaches des Betrags, Festbetrag, keine). Es gilt die erste passende Regel von oben. Voreingestellt:
 
@@ -113,6 +115,7 @@ In der Vertragsansicht stehen alle Positionen mit angewandter Regel und Provisio
 | Monatlich | PersonalManager aktive Mitarbeiter | keine |
 | Monatlich | App Grundgebühr | 395 € einmalig |
 | Monatlich | PersonalManager Grundgebühr | 395 € einmalig |
+| Monatlich | KI-Bundle | 4 × KI-Anteil |
 | Monatlich | alle übrigen (inkl. Cloud) | 6 × Monatsbeitrag |
 | Einmalig, Dienstleistung | alle | keine |
 

@@ -388,7 +388,7 @@ body.shelf-on .shelf {
 .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 600; vertical-align: middle; }
 .pill.wait { background: var(--flag-wash); color: var(--ink); border: 1px solid var(--flag-edge); }
 .pill.warn { background: var(--danger-wash); color: var(--danger); }
-.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
 .stat { display: flex; flex-direction: column; gap: 5px; padding: 16px; border-right: 1px solid var(--line); min-width: 0; }
 .stat:last-child { border-right: 0; }
 .stat .k { font-size: 12.5px; color: var(--muted); }
@@ -402,6 +402,14 @@ body.shelf-on .shelf {
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 20px; }
 .fld { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .fld textarea { resize: vertical; min-height: 70px; }
+.stat .seg { margin-top: 4px; }
+.stat .seg { align-self: flex-start; max-width: 100%; }
+.stat .seg button { padding: 7px 10px; font-size: 13px; white-space: nowrap; }
+.factor.wide { width: 140px; font-size: 16px; }
+.ki-box { border-color: var(--accent); }
+.ki-row { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: flex-end; justify-content: space-between; }
+.ki-row .sub { margin: 4px 0 0; }
+.muted-note { color: var(--muted); }
 
 /* Organizer */
 .org-head { max-width: 980px; margin: 0 auto 16px; color: var(--muted); }
@@ -572,7 +580,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 6</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 7</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2148,7 +2156,11 @@ body.shelf-on .shelf {
                    total: amounts.length > 1 ? amounts[amounts.length - 1] : (qty === null ? amounts[0] : 0),
                    page: n };
           r.items.push(last); lastY = l.y;
-        } else if (!amounts.length && name && last && Math.abs(lastY - l.y) < 12 && l.items[0].x <= last.x0 + 4) {
+        } else if (!amounts.length && qty !== null && name) {
+          // product with quantity but no price of its own, e.g. "HalloPetra Einzelkämpfer"
+          last = { section: sec, name: fixEnc(name), qty: qty, unit: null, total: 0, incl: true, page: n };
+          r.items.push(last); lastY = l.y;
+        } else if (!amounts.length && name && last && Math.abs(lastY - l.y) < 15 && l.items[0].x <= last.x0 + 4) {
           last.name += ' ' + fixEnc(name); lastY = l.y; // wrapped product name
         } else if (!amounts.length && name) {
           last = null; // group heading like "TAIFUN+"
@@ -2179,16 +2191,19 @@ body.shelf-on .shelf {
 
   /* ---------- customers, contracts and commission (PC folder mode) ---------- */
   var DATA_FILE = '_Unterschriftenmappe-Daten.json';
-  var PARSER_VERSION = 2;
+  var PARSER_VERSION = 3;
   var DEFAULT_RULES = [
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 395 },
     { sec: 'monthly', match: 'PersonalManager Grundgebühr', type: 'fixed', value: 395 },
+    { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4 },
     { sec: 'monthly', match: '', type: 'mult', value: 6 },
     { sec: 'onetime', match: '', type: 'none', value: 0 },
     { sec: 'service', match: '', type: 'none', value: 0 }
   ];
+  var DEFAULT_KI = { tiers: [99, 199, 499], variants: [{ match: 'Einzelkämpfer', price: 99 }] };
+  var KI_RE = /^(.*?)\s*(?:&|\+|\bund\b|\binkl\.?)\s*KI[-\s]?Bundle\b/i;
   var SEC_NAME = { monthly: 'Monatlich', onetime: 'Einmalig', service: 'Dienstleistung' };
   var MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   var B = { data: null, dataOk: false, contracts: [], scanning: false, rescan: false, scanned: false, progress: '',
@@ -2208,6 +2223,7 @@ body.shelf-on .shelf {
     var t = String(v).trim().replace(/\s|€/g, '');
     if (!t) return null;
     if (/,/.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, '');
     var n = Number(t);
     return isNaN(n) ? NaN : n;
   }
@@ -2215,7 +2231,7 @@ body.shelf-on .shelf {
 
   /* data file in the OneDrive folder */
   async function loadData() {
-    B.data = { rules: clone(DEFAULT_RULES), contracts: {} };
+    B.data = { rules: clone(DEFAULT_RULES), contracts: {}, ki: clone(DEFAULT_KI) };
     B.dataOk = true;
     try {
       var fh = await F.outDir.getFileHandle(DATA_FILE);
@@ -2223,6 +2239,14 @@ body.shelf-on .shelf {
       if (d && typeof d === 'object') {
         if (Array.isArray(d.rules) && d.rules.length) B.data.rules = d.rules;
         if (d.contracts && typeof d.contracts === 'object') B.data.contracts = d.contracts;
+        if (d.ki && Array.isArray(d.ki.tiers) && Array.isArray(d.ki.variants)) B.data.ki = d.ki;
+        if (!d.rulesVersion || d.rulesVersion < 2) {
+          // rules saved before the AI bundle existed: add its rule in front of the catch-all
+          if (!B.data.rules.some(function (r) { return /ki[-\s]?bundle/i.test(r.match || ''); })) {
+            var at = B.data.rules.findIndex(function (r) { return r.sec === 'monthly' && !String(r.match || '').trim(); });
+            B.data.rules.splice(at < 0 ? B.data.rules.length : at, 0, { sec: 'monthly', match: 'KI-Bundle', type: 'mult', value: 4 });
+          }
+        }
       }
     } catch (e) {
       if (e && e.name === 'NotFoundError') return;
@@ -2240,7 +2264,7 @@ body.shelf-on .shelf {
         var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
         var w = await fh.createWritable();
         await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
-                                       rules: B.data.rules, contracts: B.data.contracts }, null, 2));
+                                       rulesVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts }, null, 2));
         await w.close();
       } catch (e) {
         console.warn(e);
@@ -2278,17 +2302,49 @@ body.shelf-on .shelf {
     if (r.type === 'fixed') return 'Festbetrag ' + eur(Number(r.value) || 0);
     return deNum(Number(r.value) || 0) + ' × Betrag';
   }
+  function kiInfo(c) {
+    var items = c.parsed.items || [];
+    var combo = items.find(function (it) { return it.section === 'monthly' && it.total > 0 && KI_RE.test(it.name); });
+    if (!combo) return null;
+    var m = meta(c), ki = B.data.ki, price = null, source = '', assumed = false;
+    if (m.kiPrice) { price = m.kiPrice; source = 'von Hand gewählt'; }
+    else {
+      for (var i = 0; i < ki.variants.length && price === null; i++) {
+        var v = ki.variants[i], mt = String(v.match || '').trim().toLowerCase();
+        if (!mt) continue;
+        var hit = items.find(function (it) { return it.name.toLowerCase().indexOf(mt) >= 0; });
+        if (hit) { price = Number(v.price); source = 'erkannt an „' + hit.name + '“'; }
+      }
+    }
+    if (price === null) { price = Math.min.apply(null, ki.tiers); source = 'angenommen, Variante nicht erkannt'; assumed = true; }
+    var ok = price > 0 && price < combo.total;
+    return { item: combo, price: price, source: source, assumed: assumed || !ok, ok: ok, base: (KI_RE.exec(combo.name)[1] || '').trim() || 'Paket' };
+  }
+  function expandItems(c, info) {
+    var out = [];
+    (c.parsed.items || []).forEach(function (it) {
+      if (info && info.ok && it === info.item) {
+        out.push({ section: it.section, name: info.base, qty: it.qty, unit: round2(it.total - info.price), total: round2(it.total - info.price), from: it.name });
+        out.push({ section: it.section, name: 'KI-Bundle', qty: 1, unit: info.price, total: info.price, from: it.name, ki: true });
+      } else out.push(it);
+    });
+    return out;
+  }
+  function provMode(m) { return m.provMode || (m.provOverride !== null && m.provOverride !== undefined ? 'manual' : 'auto'); }
   function calc(c) {
-    var lines = (c.parsed.items || []).map(function (it) { var r = ruleFor(it); return { item: it, rule: r, prov: provOf(it, r) }; });
+    var info = kiInfo(c);
+    var lines = expandItems(c, info).map(function (it) { var r = ruleFor(it); return { item: it, rule: r, prov: provOf(it, r) }; });
     var auto = round2(lines.reduce(function (a, l) { return a + l.prov; }, 0));
-    var m = meta(c);
-    var prov = m.provOverride !== null && m.provOverride !== undefined ? m.provOverride : auto;
-    var payout = m.factor !== null && m.factor !== undefined ? round2(prov * m.factor) : null;
-    return { lines: lines, auto: auto, prov: prov, payout: payout, m: m };
+    var m = meta(c), mode = provMode(m);
+    var prov = mode === 'none' ? 0 : mode === 'manual' && m.provOverride !== null && m.provOverride !== undefined ? m.provOverride : auto;
+    var payout = mode === 'none' ? 0 : m.factor !== null && m.factor !== undefined ? round2(prov * m.factor) : null;
+    return { lines: lines, auto: auto, prov: prov, payout: payout, m: m, mode: mode, ki: info };
   }
   function needsCheck(c) {
     var p = c.parsed;
     if (!p.ok) return true;
+    var ki = kiInfo(c);
+    if (ki && ki.assumed) return true;
     return Object.keys(p.check || {}).some(function (k) { return !p.check[k]; });
   }
 
@@ -2438,7 +2494,9 @@ body.shelf-on .shelf {
   }
   function statusPills(c, k) {
     var out = [];
-    if (k.m.factor === null || k.m.factor === undefined) out.push('<span class="pill wait">Faktor offen</span>');
+    if (k.mode === 'none') out.push('<span class="pill">keine Provision</span>');
+    else if (k.m.factor === null || k.m.factor === undefined) out.push('<span class="pill wait">Faktor offen</span>');
+    if (k.mode === 'manual') out.push('<span class="pill">manuell</span>');
     if (needsCheck(c)) out.push('<span class="pill warn">prüfen</span>');
     return out.join(' ');
   }
@@ -2472,6 +2530,7 @@ body.shelf-on .shelf {
     var sum = function (arr, f) { return round2(arr.reduce(function (a, x) { return a + (f(x) || 0); }, 0)); };
     var withF = list.filter(function (x) { return x.k.payout !== null; });
     var noF = list.filter(function (x) { return x.k.payout === null; });
+    withF = withF.filter(function (x) { return x.k.mode !== 'none'; });
     var notBilled = list.filter(function (x) { return !x.k.m.billed; });
     var h = '<div class="biz-top"><div><h1>Provision ' + B.year + '</h1><p class="sub">Gezählt ab Unterschrift. Auszahlung = Provision × Faktor.</p></div>' +
       '<div class="biz-actions">' +
@@ -2521,7 +2580,7 @@ body.shelf-on .shelf {
     return '<tr><td>' + fmtDate(c.signed) + '</td>' +
       '<td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(c.custKey) + '">' + esc(c.custName) + '</button></td>' +
       '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> ' + statusPills(c, k) + '</td>' +
-      '<td class="num">' + eur(k.prov) + (k.m.provOverride !== null && k.m.provOverride !== undefined ? ' <span class="muted" title="manuell">✎</span>' : '') + '</td>' +
+      '<td class="num">' + eur(k.prov) + '</td>' +
       '<td class="num">' + factorInput(c, k.m) + '</td>' +
       '<td class="num">' + eur(k.payout) + '</td>' +
       '<td>' + check(c, k.m, 'installed', 'Installiert') + '</td>' +
@@ -2538,7 +2597,13 @@ body.shelf-on .shelf {
     if (p.error) h += '<div class="panel pad-in warnbox"><p>Das PDF konnte nicht gelesen werden (' + esc(p.error) + '). Trage die Provision bei Bedarf manuell ein.</p></div>';
     else if (!p.ok) h += '<div class="panel pad-in warnbox"><p>In diesem PDF wurde keine Preistabelle gefunden. Trage die Provision bei Bedarf manuell ein.</p></div>';
     h += '<div class="panel"><div class="status-grid">' +
-      '<div class="stat"><span class="k">Provision</span><span class="v">' + eur(k.prov) + '</span>' + (k.m.provOverride !== null && k.m.provOverride !== undefined ? '<span class="s">manuell, berechnet wären ' + eur(k.auto) + '</span>' : '<span class="s">nach Regeln berechnet</span>') + '</div>' +
+      '<div class="stat"><span class="k">Provision</span><span class="v">' + eur(k.prov) + '</span>' +
+        '<div class="seg" role="group" aria-label="Provision berechnen">' +
+          [['auto', 'Nach Regeln'], ['manual', 'Manuell'], ['none', 'Keine']].map(function (o) {
+            return '<button type="button" data-act="mode" data-mode="' + o[0] + '" data-key="' + esc(c.key) + '" aria-pressed="' + (k.mode === o[0]) + '">' + o[1] + '</button>';
+          }).join('') + '</div>' +
+        (k.mode === 'manual' ? '<label class="sr" for="po-' + esc(c.key) + '">Provision manuell</label><input id="po-' + esc(c.key) + '" class="factor wide" type="text" inputmode="decimal" data-key="' + esc(c.key) + '" data-f="provOverride" value="' + esc(k.m.provOverride === null || k.m.provOverride === undefined ? '' : deNum(k.m.provOverride.toFixed(2))) + '" placeholder="' + esc(deNum(k.auto.toFixed(2))) + '">' : '') +
+        '<span class="s">' + (k.mode === 'none' ? 'Für diesen Vertrag gibt es keine Provision' : k.mode === 'manual' ? 'Nach Regeln wären es ' + eur(k.auto) : 'Nach Regeln berechnet') + '</span></div>' +
       '<div class="stat"><label class="k" for="f-' + esc(c.key) + '">Faktor</label>' + factorInput(c, k.m).replace('<input ', '<input id="f-' + esc(c.key) + '" ') + '<span class="s">meist 0,6 bis 1,2</span></div>' +
       '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span></div>' +
       '<div class="stat"><span class="k">Status</span>' +
@@ -2553,10 +2618,16 @@ body.shelf-on .shelf {
       fact('Laufzeit', p.term || '–') +
       fact('Datei', (c.file.path ? c.file.path + ' › ' : '') + c.file.name + (c.older ? ' (dazu ' + c.older + ' ältere Fassung' + (c.older > 1 ? 'en' : '') + ')' : '')) +
       '</div></div>';
+    if (k.ki) {
+      h += '<div class="panel pad-in ki-box"><div class="ki-row"><div><strong>KI-Bundle im Paketpreis</strong><p class="sub">In „' + esc(k.ki.item.name) + '“ (' + eur(k.ki.item.total) + ') steckt das KI-Bundle. ' +
+        (k.ki.ok ? 'Herausgerechnet: ' + eur(k.ki.price) + ', ' + esc(k.ki.source) + '.' : 'Der KI-Anteil passt nicht zum Paketpreis, bitte wählen.') + '</p></div>' +
+        '<label class="fld"><span>KI-Anteil</span><select class="sel" data-key="' + esc(c.key) + '" data-f="kiPrice"><option value="">automatisch</option>' +
+        B.data.ki.tiers.map(function (t) { return '<option value="' + t + '"' + (k.m.kiPrice === t ? ' selected' : '') + '>' + eur(t) + '</option>'; }).join('') + '</select></label></div></div>';
+    }
     if (p.items && p.items.length) {
       h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Bereich</th><th>Position</th><th class="num">Menge</th><th class="num">Betrag</th><th>Regel</th><th class="num">Provision</th></tr></thead><tbody>';
       k.lines.forEach(function (l) {
-        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + esc(ruleText(l.rule)) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
+        h += '<tr' + (l.prov ? '' : ' class="dim"') + '><td>' + SEC_NAME[l.item.section] + '</td><td class="wrap">' + esc(l.item.name) + (l.item.from ? ' <span class="muted">aus „' + esc(l.item.from) + '“</span>' : '') + '</td><td class="num">' + deNum(l.item.qty) + '</td><td class="num">' + (l.item.incl ? '<span class="muted">im Preis enthalten</span>' : l.item.total === 0 && l.item.unit ? '<span class="muted">nach Aufwand</span>' : eur(l.item.total) + (l.item.section === 'monthly' ? '<span class="muted"> /Monat</span>' : '')) + '</td><td>' + esc(ruleText(l.rule)) + '</td><td class="num">' + eur(l.prov) + '</td></tr>';
       });
       h += '</tbody><tfoot><tr><td colspan="5">Provision laut Regeln</td><td class="num">' + eur(k.auto) + '</td></tr></tfoot></table></div>';
       var chk = Object.keys(p.check || {});
@@ -2569,7 +2640,6 @@ body.shelf-on .shelf {
       h += '</div>';
     }
     h += '<div class="panel pad-in"><div class="two">' +
-      '<label class="fld"><span>Provision manuell (optional)</span><input type="text" inputmode="decimal" data-key="' + esc(c.key) + '" data-f="provOverride" value="' + esc(k.m.provOverride === null || k.m.provOverride === undefined ? '' : deNum(k.m.provOverride)) + '" placeholder="' + esc(deNum(k.auto.toFixed(2))) + '"></label>' +
       '<label class="fld"><span>Notiz</span><textarea rows="3" data-key="' + esc(c.key) + '" data-f="note" placeholder="z. B. Installationstermin, Ansprechpartner">' + esc(k.m.note || '') + '</textarea></label>' +
       '</div></div>';
     return h;
@@ -2609,10 +2679,19 @@ body.shelf-on .shelf {
         '<td class="row-btns"><button type="button" class="btn small" data-act="up" data-i="' + i + '"' + (i === 0 ? ' disabled' : '') + ' aria-label="nach oben">↑</button><button type="button" class="btn small" data-act="down" data-i="' + i + '"' + (i === rules.length - 1 ? ' disabled' : '') + ' aria-label="nach unten">↓</button><button type="button" class="btn small danger" data-act="delrule" data-i="' + i + '">Entfernen</button></td></tr>';
     });
     h += '</tbody></table></div></div>';
+    var ki = B.data.ki;
+    h += '<h2 class="h2">KI-Bundle im Paketpreis</h2><div class="panel pad-in"><p class="sub" style="margin:0 0 12px">Steht im Angebot eine Zeile wie „Paket L &amp; KI-Bundle“, rechnet die App den KI-Anteil heraus: Das Paket läuft über seine normale Regel, der KI-Anteil über die Regel „KI-Bundle“. Welche Stufe gilt, erkennt sie an der Variante im Angebot. Im Vertrag lässt sie sich auch von Hand wählen.</p>' +
+      '<label class="fld" style="max-width:280px"><span>Mögliche KI-Preise (€)</span><input type="text" class="txt" data-key="kitiers" data-f="tiers" value="' + esc(ki.tiers.map(deNum).join('; ')) + '"></label></div>' +
+      '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Variante im Angebot enthält</th><th>KI-Anteil</th><th></th></tr></thead><tbody>' +
+      ki.variants.map(function (v, i) {
+        return '<tr><td><input type="text" class="txt" data-key="kiv' + i + '" data-f="match" value="' + esc(v.match) + '" placeholder="z. B. Einzelkämpfer"></td>' +
+          '<td><select class="sel" data-key="kiv' + i + '" data-f="price">' + ki.tiers.map(function (t) { return '<option value="' + t + '"' + (Number(v.price) === t ? ' selected' : '') + '>' + eur(t) + '</option>'; }).join('') + '</select></td>' +
+          '<td><button type="button" class="btn small danger" data-act="delkiv" data-i="' + i + '">Entfernen</button></td></tr>';
+      }).join('') + '</tbody></table></div><p class="tbl-note muted-note"><button type="button" class="linkish" data-act="addkiv">+ Variante hinzufügen</button></p></div>';
     // products found in the contracts
     var prods = new Map();
     B.contracts.forEach(function (c) {
-      (c.parsed.items || []).forEach(function (it) {
+      expandItems(c, kiInfo(c)).forEach(function (it) {
         var key = it.section + '|' + it.name;
         var p = prods.get(key);
         if (!p) { p = { it: it, n: 0 }; prods.set(key, p); }
@@ -2653,6 +2732,17 @@ body.shelf-on .shelf {
     else if (act === 'resetrules') {
       armConfirm(b, 'Wirklich zurücksetzen?', function () { B.data.rules = clone(DEFAULT_RULES); saveData(); rerender(); toast('Standardregeln wiederhergestellt.'); });
     } else if (act === 'delrule') { rules.splice(idx, 1); saveData(); rerender(); }
+    else if (act === 'addkiv') { B.data.ki.variants.push({ match: '', price: B.data.ki.tiers[0] }); saveData(); rerender(); }
+    else if (act === 'delkiv') { B.data.ki.variants.splice(idx, 1); saveData(); rerender(); }
+    else if (act === 'mode') {
+      var cm = B.contracts.find(function (x) { return x.key === b.dataset.key; });
+      if (!cm) return;
+      var mm = meta(cm);
+      mm.provMode = b.dataset.mode;
+      if (mm.provMode === 'manual' && (mm.provOverride === null || mm.provOverride === undefined)) mm.provOverride = calc(cm).auto;
+      saveData(); renderBiz(); renderCustomers();
+      if (mm.provMode === 'manual') { var pi = bizEl.querySelector('[data-f="provOverride"]'); if (pi) { pi.focus(); pi.select(); } }
+    }
     else if (act === 'up' && idx > 0) { var t = rules[idx - 1]; rules[idx - 1] = rules[idx]; rules[idx] = t; saveData(); rerender(); }
     else if (act === 'down' && idx < rules.length - 1) { var t2 = rules[idx + 1]; rules[idx + 1] = rules[idx]; rules[idx] = t2; saveData(); rerender(); }
   });
@@ -2661,6 +2751,17 @@ body.shelf-on .shelf {
     if (t.id === 'yearSel') { B.year = Number(t.value); rerender(); return; }
     var key = t.dataset && t.dataset.key, f = t.dataset && t.dataset.f;
     if (!key || !f) return;
+    if (key === 'kitiers') {
+      var tiers = t.value.split(/[;\s]+/).map(parseNum).filter(function (n) { return n !== null && !isNaN(n) && n > 0; });
+      if (!tiers.length) { toast('Bitte mindestens einen Preis eingeben, z. B. 99; 199; 499.'); t.value = B.data.ki.tiers.map(deNum).join('; '); return; }
+      B.data.ki.tiers = tiers; saveData(); rerender(); return;
+    }
+    if (key.indexOf('kiv') === 0) {
+      var kv = B.data.ki.variants[Number(key.slice(3))];
+      if (!kv) return;
+      if (f === 'price') kv.price = Number(t.value); else kv.match = t.value.trim();
+      saveData(); rerender(); return;
+    }
     if (key.indexOf('rule') === 0) {
       var r = B.data.rules[Number(key.slice(4))];
       if (!r) return;
@@ -2675,7 +2776,9 @@ body.shelf-on .shelf {
     var c = B.contracts.find(function (x) { return x.key === key; });
     if (!c) return;
     var m = meta(c);
-    if (f === 'installed' || f === 'billed') {
+    if (f === 'kiPrice') {
+      m.kiPrice = t.value ? Number(t.value) : null;
+    } else if (f === 'installed' || f === 'billed') {
       m[f] = t.checked; m[f + 'At'] = t.checked ? Date.now() : null;
     } else if (f === 'factor' || f === 'provOverride') {
       var v = parseNum(t.value);
