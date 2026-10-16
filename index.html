@@ -606,7 +606,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 16</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 17</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2126,6 +2126,13 @@ body.shelf-on .shelf {
     });
     lines.forEach(function (l) {
       l.items.sort(function (a, b) { return a.x - b.x; });
+      // some offers put the euro sign in its own text item ("59,95" + "€"): join them
+      l.items = l.items.reduce(function (acc, it) {
+        var prev = acc[acc.length - 1];
+        if (prev && /^€$/.test(it.s) && /\d,\d{2}$/.test(prev.s)) { prev.s += ' €'; prev.w = it.x + it.w - prev.x; }
+        else acc.push(it);
+        return acc;
+      }, []);
       l.text = l.items.map(function (i) { return i.s; }).join(' ');
     });
     return lines;
@@ -2146,7 +2153,7 @@ body.shelf-on .shelf {
       r.chars = (r.chars || 0) + lines.reduce(function (a, l) { return a + l.text.length; }, 0);
       lines.forEach(function (l, i) {
         var t = l.text, m;
-        if (!r.offerNo && (m = /(?:abo)?angebot(?:s-?nr\.?)?\s*:?\s+([A-Za-z0-9][\w\-\/.]*\d[\w\-\/.]*)/i.exec(t)) && !/vom\s/i.test(t)) r.offerNo = m[1];
+        if (!r.offerNo && (m = /(?:abo)?angebot(?:s-?nr\.?)?\s*:?\s+([A-Za-z0-9_][\w\-\/.]*\d[\w\-\/.]*)/i.exec(t)) && !/vom\s/i.test(t)) r.offerNo = m[1];
         if (!r.customer.no && (m = /(?:kunden\s*-?\s*nr\.?|kd\.?-?\s*nr\.?)\s*:?\s*(\d{3,})/i.exec(t))) r.customer.no = m[1];
         if (!r.offerDate && (m = /\bdatum\s*:?\s*(\d{1,2}\.\d{1,2}\.\d{4})/i.exec(t))) r.offerDate = m[1];
         if (!r.offerDate2 && (m = /angebot\s+vom\s+(\d{1,2}\.\d{1,2}\.\d{4})/i.exec(t))) r.offerDate2 = m[1];
@@ -2220,7 +2227,7 @@ body.shelf-on .shelf {
 
   /* ---------- customers, contracts and commission (PC folder mode) ---------- */
   var DATA_FILE = '_Unterschriftenmappe-Daten.json';
-  var PARSER_VERSION = 4;
+  var PARSER_VERSION = 5;
   var DEFAULT_RULES = [
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
