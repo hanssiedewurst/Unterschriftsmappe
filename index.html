@@ -534,6 +534,10 @@ body.shelf-on .shelf {
 .ready-name { word-break: break-all; color: var(--muted); font-size: 13.5px; }
 .ready-hint { margin: 0; color: var(--muted); font-size: 13.5px; max-width: 46ch; }
 .ready-btns { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.ready-copy { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ready-copy .fd-inline { flex-wrap: wrap; }
+.ready-copy input { font: 400 16px/1.3 var(--f-sans); color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-width: 0; flex: 1 1 200px; }
+.ready-copy .muted-note { margin: 0; font-size: 12.5px; color: var(--muted); }
 .diag {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 65; max-height: 70vh;
   display: flex; flex-direction: column; gap: 10px;
@@ -635,7 +639,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 23</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 24</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -740,6 +744,11 @@ body.shelf-on .shelf {
     <h2 class="ready-title" id="readyTitle">PDF ist fertig</h2>
     <span class="ready-name mono" id="readyName"></span>
     <p class="ready-hint" id="readyHint"></p>
+    <div class="ready-copy" id="readyCopy" hidden>
+      <label class="fd-row" for="readyMail"><span>Kopie an den Kunden</span></label>
+      <div class="fd-inline"><input id="readyMail" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="kunde@firma.de"><button class="btn" type="button" id="readyMailGo">Kopie per Mail senden</button></div>
+      <p class="muted-note" id="readyMailNote">Die Adresse wird kopiert. In der Mail bei „An“ einfügen.</p>
+    </div>
     <div class="ready-btns">
       <button class="btn" type="button" id="readyClose">Schließen</button>
       <button class="btn primary" type="button" id="readyGo">Sichern oder teilen</button>
@@ -2426,8 +2435,46 @@ body.shelf-on .shelf {
     return base + '_' + d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + '.pdf';
   }
 
+  /* customer copy: guess and remember the customer's mail address */
+  var OWN_MAIL = /@(taifun-software\.de|oneqrew\.com)$/i;
+  function docKey() {
+    var d = docsInUse()[0];
+    return d ? d.name.replace(/\.pdf$/i, '').replace(/_(unterschrieben|geaendert|zusammengefuegt).*$/i, '').trim().toLowerCase() : '';
+  }
+  function mailStore(k, v) {
+    try {
+      var m = JSON.parse(localStorage.getItem('um-mails') || '{}');
+      if (v === undefined) return m[k] || '';
+      m[k] = v; localStorage.setItem('um-mails', JSON.stringify(m));
+    } catch (e) { return ''; }
+    return v;
+  }
+  async function guessCustomerMail() {
+    var k = docKey(), known = k ? mailStore(k) : '';
+    if (known) return known;
+    var seen = [];
+    for (var i = 0; i < S.pages.length && i < 12; i++) {
+      try {
+        (await pageTextItems(S.pages[i])).forEach(function (it) {
+          (it.str.match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/gi) || []).forEach(function (m) {
+            m = m.toLowerCase();
+            if (!OWN_MAIL.test(m) && !/^(info|kontakt|service|support)@taifun/i.test(m) && seen.indexOf(m) < 0) seen.push(m);
+          });
+        });
+      } catch (e) {}
+    }
+    return seen[0] || '';
+  }
+  function copyMailText() {
+    var d = docsInUse()[0], nm = d ? d.name.replace(/\.pdf$/i, '').replace(/_(unterschrieben|geaendert|zusammengefuegt).*$/i, '') : 'Vertrag';
+    return {
+      subject: 'Ihr unterschriebener Vertrag – ' + nm,
+      body: 'Guten Tag,\n\nanbei erhalten Sie Ihren unterschriebenen Vertrag als PDF für Ihre Unterlagen.\n\nMit freundlichen Grüßen'
+    };
+  }
+
   var readyEl = $('#ready');
-  var ready = { blob: null, file: null, name: '', share: false };
+  var ready = { blob: null, file: null, name: '', share: false, signed: false, saved: '' };
   function fmtSize(n) {
     return n > 1048576 ? (n / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   }
@@ -2440,23 +2487,34 @@ body.shelf-on .shelf {
     a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
   }
-  function deliver(bytes, filename) {
+  function deliver(bytes, filename, opts) {
+    opts = opts || {};
+    ready.signed = !!opts.signed; ready.saved = opts.saved || '';
     ready.blob = new Blob([bytes], { type: 'application/pdf' });
     ready.name = filename;
     ready.file = new File([ready.blob], filename, { type: 'application/pdf' });
     ready.share = canShareFiles(ready.file);
     $('#readyName').textContent = filename + ' · ' + fmtSize(ready.blob.size);
     $('#readyGo').textContent = ready.share ? 'Sichern oder teilen' : 'Herunterladen';
-    $('#readyHint').textContent = ready.share
+    $('#readyTitle').textContent = ready.saved ? 'Gespeichert in „' + ready.saved + '“' : 'PDF ist fertig';
+    $('#readyGo').textContent = ready.saved ? (ready.share ? 'Zusätzlich teilen' : 'Zusätzlich herunterladen') : $('#readyGo').textContent;
+    $('#readyHint').textContent = ready.saved ? 'Das unterschriebene PDF liegt im Ordner. Schick dem Kunden direkt eine Kopie.'
+      : ready.share
       ? 'Im nächsten Schritt „In Dateien sichern“ wählen, oder das PDF direkt per Mail oder Nachricht verschicken.'
       : 'Das PDF wird in den Download-Ordner dieses Geräts gespeichert.';
+    $('#readyCopy').hidden = !ready.signed;
+    if (ready.signed) {
+      $('#readyMail').value = '';
+      $('#readyMailNote').textContent = ready.share ? 'Die Adresse wird kopiert. In der Mail bei „An“ einfügen.' : 'Das Mailprogramm öffnet sich, das PDF wird heruntergeladen. Bitte als Anhang einfügen.';
+      guessCustomerMail().then(function (m) { if (m && !$('#readyMail').value) $('#readyMail').value = m; });
+    }
     readyEl.hidden = false;
     $('#readyGo').focus();
   }
   $('#readyGo').addEventListener('click', function () {
     if (ready.share) {
       navigator.share({ files: [ready.file] })
-        .then(function () { readyEl.hidden = true; toast('PDF übergeben.'); })
+        .then(function () { if (!ready.signed) readyEl.hidden = true; toast('PDF übergeben.'); })
         .catch(function (e) {
           if (e && e.name === 'AbortError') return;
           downloadBlob(ready.blob, ready.name); readyEl.hidden = true;
@@ -2468,6 +2526,21 @@ body.shelf-on .shelf {
     }
   });
   $('#readyClose').addEventListener('click', function () { readyEl.hidden = true; });
+  $('#readyMailGo').addEventListener('click', function () {
+    var mail = $('#readyMail').value.trim(), txt = copyMailText();
+    if (mail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) { toast('Bitte eine gültige Mailadresse eingeben.'); $('#readyMail').focus(); return; }
+    if (mail) { var k = docKey(); if (k) mailStore(k, mail); }
+    if (ready.share) {
+      if (mail && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mail).catch(function () {});
+      navigator.share({ files: [ready.file], title: txt.subject, text: txt.body })
+        .then(function () { toast(mail ? 'Kopie übergeben. Adresse war in der Zwischenablage: ' + mail : 'Kopie übergeben.', { ms: 6000 }); })
+        .catch(function (e) { if (e && e.name !== 'AbortError') toast('Teilen hat nicht geklappt (' + e.message + ').'); });
+    } else {
+      downloadBlob(ready.blob, ready.name);
+      location.href = 'mailto:' + encodeURIComponent(mail) + '?subject=' + encodeURIComponent(txt.subject) + '&body=' + encodeURIComponent(txt.body);
+      toast('PDF heruntergeladen: ' + ready.name + '. Bitte in der Mail anhängen.', { ms: 8000 });
+    }
+  });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !readyEl.hidden) readyEl.hidden = true; });
 
   async function doSave() {
@@ -2489,7 +2562,8 @@ body.shelf-on .shelf {
         if (!(await perm(target, true))) throw new Error('kein Zugriff auf den Ordner');
         var saved = await saveToFolder(bytes, name, target);
         S.unsaved = false;
-        toast('Gespeichert in „' + target.name + '“: ' + saved, { actionLabel: 'Zusätzlich teilen', action: function () { deliver(bytes, saved); }, ms: 8000 });
+        if (signedNow && typeof deliver === 'function' && deliver.length >= 3) deliver(bytes, saved, { saved: target.name, signed: true });
+        else toast('Gespeichert in „' + target.name + '“: ' + saved, { actionLabel: 'Zusätzlich teilen', action: function () { deliver(bytes, saved); }, ms: 8000 });
         refreshShelf();
         return;
       } catch (e) {
@@ -2498,7 +2572,7 @@ body.shelf-on .shelf {
       }
     }
     S.unsaved = false;
-    await deliver(bytes, name);
+    await deliver(bytes, name, { signed: S.zones.some(function (z) { return z.sig; }) });
   }
 
   /* ---------- OneDrive folders (Edge/Chrome on a computer) ---------- */
