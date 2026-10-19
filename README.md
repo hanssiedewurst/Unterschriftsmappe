@@ -56,7 +56,7 @@ Unter **Seiten ordnen** lässt sich die Reihenfolge ändern, und überflüssige 
 
 **Text im PDF ändern (z. B. Preis oder Laufzeit):** **Hinzufügen → Text ändern**. Alle änderbaren Texte werden blau hinterlegt. Auf einen Text tippen, neuen Wert eintragen, Ausrichtung prüfen (Beträge rechtsbündig), **Übernehmen**. Geänderte Stellen sind gestrichelt umrandet. Ein Tipp darauf ändert sie erneut, **Original** stellt sie wieder her. Mit **Fertig** endet der Modus.
 - Beim Speichern wird der alte Text aus dem PDF entfernt, nicht nur überdeckt, und der neue in derselben Schrift, Größe und Farbe gesetzt, soweit die Zeichen in der eingebetteten Schrift vorhanden sind. Sonst nimmt die App Helvetica.
-- Abhängige Werte (Gesamtpreis, Sonderpreis-Satz) bitte ebenfalls ändern. Passt die Summe nicht, markiert die Provisionsübersicht den Vertrag mit „prüfen“.
+- **Automatisch mitrechnen** (Häkchen im Dialog, standardmäßig an): Ändert man Menge, Einzelpreis oder Rabatt in einer Preistabelle, rechnet die App den Gesamtpreis der Zeile, die Summe („Gesamtpreis (pro Monat)“ usw.) und einen Satz wie „Der Sonderpreis beträgt …“ neu. Automatisch geänderte Stellen sind grün gepunktet umrandet und lassen sich per Tipp von Hand überschreiben. Was nicht in der Tabelle steht (z. B. eine Summe auf einer anderen Seite in eigenem Wortlaut), bitte selbst prüfen.
 - Am PC im Ordnermodus landet ein geändertes, noch nicht unterschriebenes Angebot als „…_geaendert_Datum.pdf“ im **Angebote**-Ordner. Mit Unterschrift geht es wie gewohnt nach **Unterschrieben**.
 
 ---

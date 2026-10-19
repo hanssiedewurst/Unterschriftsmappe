@@ -238,6 +238,8 @@ body.editing .zone, body.editing .field { pointer-events: none; opacity: .55; }
 .te-old { margin: 0; font-size: 14px; color: var(--muted); }
 .te-old strong { color: var(--ink); font-weight: 600; }
 .te-note { margin: 0; font-size: 12.5px; color: var(--muted); }
+.te-auto { font-size: 14px; color: var(--ink); }
+.tedit.auto { outline: 1px dotted #1f8a4c; }
 
 /* Add menu */
 .menu-wrap { position: relative; }
@@ -633,7 +635,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 22</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 23</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -712,7 +714,8 @@ body.shelf-on .shelf {
         <button type="button" data-align="left" aria-pressed="true">Linksbündig</button><button type="button" data-align="right" aria-pressed="false">Rechtsbündig</button>
       </div>
     </div>
-    <p class="te-note">Denk an abhängige Werte wie Gesamtpreis oder Sonderpreis-Text, die musst du ebenfalls ändern.</p>
+    <label class="chk te-auto"><input type="checkbox" id="teAuto" checked> Zeilen- und Gesamtpreise automatisch mitrechnen</label>
+    <p class="te-note">Bei Menge, Einzelpreis oder Rabatt rechnet die App den Gesamtpreis der Zeile und die Summe darunter neu, auch einen Satz wie „Der Sonderpreis beträgt …“.</p>
     <div class="ready-btns">
       <button class="btn quiet danger" type="button" id="teReset">Original</button>
       <span class="grow"></span>
@@ -1398,7 +1401,7 @@ body.shelf-on .shelf {
   function buildEdit(ed) {
     var el = document.createElement('div');
     ed.el = el;
-    el.className = 'tedit' + (ed.align === 'right' ? ' right' : '');
+    el.className = 'tedit' + (ed.align === 'right' ? ' right' : '') + (ed.auto ? ' auto' : '');
     el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', 'Geänderter Text: ' + ed.value + ' (bisher ' + ed.old + ')');
     el.title = 'Bisher: ' + ed.old;
     var sp = document.createElement('span'); sp.textContent = ed.value; el.appendChild(sp);
@@ -1414,6 +1417,8 @@ body.shelf-on .shelf {
     ed.el.style.width = (ed.w + 2) * s + 'px'; ed.el.style.height = ed.h * s + 'px';
     ed.el.style.background = ed.bg || '#ffffff';
     ed.el.classList.toggle('right', ed.align === 'right');
+    ed.el.classList.toggle('auto', !!ed.auto);
+    ed.el.title = (ed.auto ? 'Automatisch berechnet, bisher: ' : 'Bisher: ') + ed.old;
     var sp = ed.el.firstChild; sp.textContent = ed.value; sp.style.fontSize = (ed.size * s) + 'px';
   }
   var teEl = $('#teDlg'), te = { ed: null, p: null, it: null, align: 'left' };
@@ -1427,6 +1432,7 @@ body.shelf-on .shelf {
     $('#teOld').textContent = old;
     $('#teValue').value = ed ? ed.value : old;
     $('#teReset').hidden = !ed;
+    $('#teAuto').checked = S.autoSum !== false;
     markAlign();
     teEl.hidden = false;
     document.documentElement.classList.add('no-scroll');
@@ -1436,6 +1442,17 @@ body.shelf-on .shelf {
     teEl.hidden = true; te.ed = null; te.it = null;
     document.documentElement.classList.remove('no-scroll');
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  }
+  function createEdit(p, it, value, align, auto) {
+    var ed = { id: nid('t'), pageId: p.id, docId: p.docId, old: it.str, e: it.e, f: it.f, width: it.width, size: it.fh,
+               x: it.x, y: it.y, w: it.w, h: it.h, bx: it.bx, by: it.by, bg: sampleBg(p, it), value: value, align: align, auto: !!auto };
+    S.edits.push(ed);
+    if (p.layer) {
+      p.layer.appendChild(buildEdit(ed));
+      p.layer.querySelectorAll('.thint').forEach(function (n) { if (n._item === it) n.remove(); });
+    }
+    positionEdit(ed);
+    return ed;
   }
   function removeEdit(ed) {
     if (ed.el) ed.el.remove();
@@ -1448,27 +1465,132 @@ body.shelf-on .shelf {
     e.preventDefault();
     var val = $('#teValue').value.replace(/\s+$/, '').replace(/^\s+/, ''), ed = te.ed, p = te.p;
     if (!p) { closeTextEdit(); return; }
-    if (ed && val === ed.old && te.align === ed.align) { removeEdit(ed); closeTextEdit(); toast('Original wiederhergestellt.'); return; }
-    if (!ed) {
-      var it = te.it;
-      if (val === it.str) { closeTextEdit(); return; }
-      ed = { id: nid('t'), pageId: p.id, docId: p.docId, old: it.str, e: it.e, f: it.f, width: it.width, size: it.fh,
-             x: it.x, y: it.y, w: it.w, h: it.h, bx: it.bx, by: it.by, bg: sampleBg(p, it) };
-      S.edits.push(ed);
-      p.layer.appendChild(buildEdit(ed));
-      p.layer.querySelectorAll('.thint').forEach(function (n) { if (n._item === it) n.remove(); });
-    }
+    S.autoSum = $('#teAuto').checked;
     var oldS = (ed ? ed.old : te.it.str).trim();
     if (/^[-+]?[\d.,\s]+\s*€$/.test(oldS) && /^[-+]?[\d.,]+$/.test(val)) val += ' €';
-    ed.value = val; ed.align = te.align;
+    if (ed && val === ed.old && te.align === ed.align) { removeEdit(ed); closeTextEdit(); afterEdit(p, 'Original wiederhergestellt.'); return; }
+    if (!ed) {
+      if (val === te.it.str) { closeTextEdit(); return; }
+      ed = createEdit(p, te.it, val, te.align, false);
+    }
+    ed.value = val; ed.align = te.align; ed.auto = false;
     if (ed.el) ed.el.setAttribute('aria-label', 'Geänderter Text: ' + val + ' (bisher ' + ed.old + ')');
     positionEdit(ed);
     S.unsaved = true;
     closeTextEdit();
     updateChrome();
+    afterEdit(p);
   });
+  function afterEdit(p, msg) {
+    recalcDoc(p.docId).then(function (ch) {
+      if (ch.length) toast('Automatisch angepasst: ' + ch.join(' · '), { ms: 7000 });
+      else if (msg) toast(msg);
+    }).catch(function (e) { console.warn('Summen nicht berechnet', e); if (msg) toast(msg); });
+  }
+
+  /* recalculating row totals and sums in price tables */
+  var TBL_SECTION = /^(leistungsbestandteile|einmalige investitionen|dienstleistungen)\b/i;
+  function textLines(items) {
+    var sorted = items.slice().sort(function (a, b) { return (b.f - a.f) || (a.e - b.e); }), lines = [];
+    sorted.forEach(function (it) {
+      var l = lines[lines.length - 1];
+      if (l && Math.abs(l.f - it.f) <= 2.5) l.items.push(it); else lines.push({ f: it.f, items: [it] });
+    });
+    lines.forEach(function (l) { l.items.sort(function (a, b) { return a.e - b.e; }); l.text = l.items.map(function (i) { return i.str.trim(); }).join(' '); });
+    return lines;
+  }
+  function tblRow(p, line) {
+    var toks = [];
+    line.items.forEach(function (it) {
+      var s0 = it.str.trim(), prev = toks[toks.length - 1];
+      if (s0 === '€' && prev && /\d,\d{2}$/.test(prev.s)) { prev.euroAfter = true; return; }
+      if (s0 === '%' && prev && /\d$/.test(prev.s)) { prev.pct = true; return; }
+      toks.push({ s: s0, it: it });
+    });
+    var name = [], qty = null, disc = null, amounts = [];
+    toks.forEach(function (t) {
+      var isPct = /%$/.test(t.s) || t.pct;
+      var isAmt = /^-?[\d.]+,\d{2}(\s*€)?$/.test(t.s) && (/€/.test(t.s) || t.euroAfter);
+      if (isPct && amounts.length) disc = t;
+      else if (isAmt) amounts.push(t);
+      else if (!amounts.length && /^\d+(,\d+)?$/.test(t.s) && name.length) qty = t;
+      else if (!amounts.length) name.push(t.s);
+    });
+    var cell = function (t) { return t ? { p: p, it: t.it, euro: /€/.test(t.s) } : null; };
+    var nm = name.join(' ');
+    if (/^gesamt(preis|summe|betrag)/i.test(nm)) return { isSum: true, total: amounts.length ? cell(amounts[amounts.length - 1]) : null, line: line };
+    if (!amounts.length) return null;
+    var single = amounts.length === 1;
+    return { name: nm, qty: cell(qty), disc: cell(disc), unit: single && !qty ? null : cell(amounts[0]),
+             total: single ? (qty ? null : cell(amounts[0])) : cell(amounts[amounts.length - 1]) };
+  }
+  function cellEdit(c) { return c ? editFor(c.p, c.it) : null; }
+  function cellText(c) { var ed = cellEdit(c); return ed ? ed.value : c.it.str; }
+  function cellNum(c) { var v = parseNum(String(cellText(c)).replace(/%/g, '')); return v === null || isNaN(v) ? null : v; }
+  function manual(c) { var ed = cellEdit(c); return !!(ed && !ed.auto); }
+  function fmtDe(v) { return v.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  async function recalcDoc(docId) {
+    var pages = S.pages.filter(function (p) { return p.docId === docId; }).sort(function (a, b) { return a.index - b.index; });
+    var sections = [], cur = null, lineList = [];
+    for (var k = 0; k < pages.length; k++) {
+      var p = pages[k], lines = textLines(await pageTextItems(p));
+      lines.forEach(function (l) {
+        lineList.push({ p: p, l: l });
+        if (TBL_SECTION.test(l.text)) { cur = { rows: [], sum: null }; sections.push(cur); return; }
+        if (!cur) return;
+        var r = tblRow(p, l);
+        if (!r) return;
+        if (r.isSum) { cur.sum = r; cur = null; return; }
+        cur.rows.push(r);
+      });
+    }
+    var setNow = new Set(), changes = [];
+    function setAuto(c, val, label) {
+      if (!c) return;
+      var ex = cellEdit(c);
+      if (ex && !ex.auto) return;
+      var orig = c.inText ? null : parseNum(c.it.str);
+      var txt = c.inText ? c.it.str.replace(c.inText, fmtDe(val)) : fmtDe(val) + (c.euro ? ' €' : '');
+      if ((c.inText && txt === c.it.str) || (orig !== null && !isNaN(orig) && Math.abs(orig - val) < 0.005)) { if (ex) { removeEdit(ex); changes.push(label + ' zurück auf ' + c.it.str.trim()); } return; }
+      if (ex) { if (ex.value !== txt) { ex.value = txt; positionEdit(ex); changes.push(label + ' ' + txt); } setNow.add(ex); return; }
+      var ne = createEdit(c.p, c.it, txt, c.inText ? 'left' : 'right', true);
+      setNow.add(ne); changes.push(label + ' ' + txt);
+    }
+    if (S.autoSum !== false) {
+      sections.forEach(function (sec) {
+        var touched = false;
+        sec.rows.forEach(function (r) {
+          var inputs = [r.qty, r.unit, r.disc].some(manual);
+          if (inputs || manual(r.total)) touched = true;
+          if (inputs && r.total && r.unit && !manual(r.total)) {
+            var q = r.qty ? cellNum(r.qty) : 1, u = cellNum(r.unit), d = r.disc ? Math.abs(cellNum(r.disc) || 0) : 0;
+            if (q !== null && u !== null) setAuto(r.total, Math.round(q * u * (1 - d / 100) * 100) / 100, r.name || 'Zeile');
+          }
+        });
+        if (!touched || !sec.sum || !sec.sum.total || manual(sec.sum.total)) return;
+        var oldSum = parseNum(sec.sum.total.it.str);
+        var sum = Math.round(sec.rows.reduce(function (a, r) { return a + (r.total ? cellNum(r.total) || 0 : 0); }, 0) * 100) / 100;
+        setAuto(sec.sum.total, sum, 'Summe');
+        // a sentence repeating the old sum, e.g. "Der Sonderpreis beträgt 99,85 €"
+        lineList.forEach(function (x) {
+          if (sections.some(function (o) { return o.sum && o.sum.line === x.l; }) || !/sonderpreis|betr(ä|a)gt|gesamt/i.test(x.l.text)) return;
+          x.l.items.forEach(function (it) {
+            if (it === sec.sum.total.it) return;
+            (it.str.match(/-?\d{1,3}(?:\.\d{3})*,\d{2}/g) || []).forEach(function (m) {
+              if (Math.abs(parseNum(m) - oldSum) < 0.005) setAuto({ p: x.p, it: it, inText: m }, sum, 'Text');
+            });
+          });
+        });
+      });
+    }
+    // auto values that no longer apply go back to the original
+    S.edits.filter(function (ed) { return ed.auto && ed.docId === docId && !setNow.has(ed); }).forEach(function (ed) { removeEdit(ed); changes.push('zurück auf ' + ed.old.trim()); });
+    if (S.placing === 'edit') showHints();
+    updateChrome();
+    return changes;
+  }
   $('#teCancel').addEventListener('click', closeTextEdit);
-  $('#teReset').addEventListener('click', function () { var ed = te.ed; closeTextEdit(); if (ed) { removeEdit(ed); toast('Original wiederhergestellt.'); } });
+  $('#teReset').addEventListener('click', function () { var ed = te.ed, p = te.p; closeTextEdit(); if (ed) { removeEdit(ed); if (p) afterEdit(p, 'Original wiederhergestellt.'); } });
   document.querySelectorAll('#teDlg [data-align]').forEach(function (b) { b.addEventListener('click', function () { te.align = b.dataset.align; markAlign(); }); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !teEl.hidden) closeTextEdit(); });
 
