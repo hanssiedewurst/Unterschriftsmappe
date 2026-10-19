@@ -54,6 +54,11 @@ Danach läuft die App auch ohne Netz, zum Beispiel beim Kunden im Funkloch.
 
 Unter **Seiten ordnen** lässt sich die Reihenfolge ändern, und überflüssige Seiten lassen sich entfernen.
 
+**Text im PDF ändern (z. B. Preis oder Laufzeit):** **Hinzufügen → Text ändern**. Alle änderbaren Texte werden blau hinterlegt. Auf einen Text tippen, neuen Wert eintragen, Ausrichtung prüfen (Beträge rechtsbündig), **Übernehmen**. Geänderte Stellen sind gestrichelt umrandet. Ein Tipp darauf ändert sie erneut, **Original** stellt sie wieder her. Mit **Fertig** endet der Modus.
+- Beim Speichern wird der alte Text aus dem PDF entfernt, nicht nur überdeckt, und der neue in derselben Schrift, Größe und Farbe gesetzt, soweit die Zeichen in der eingebetteten Schrift vorhanden sind. Sonst nimmt die App Helvetica.
+- Abhängige Werte (Gesamtpreis, Sonderpreis-Satz) bitte ebenfalls ändern. Passt die Summe nicht, markiert die Provisionsübersicht den Vertrag mit „prüfen“.
+- Am PC im Ordnermodus landet ein geändertes, noch nicht unterschriebenes Angebot als „…_geaendert_Datum.pdf“ im **Angebote**-Ordner. Mit Unterschrift geht es wie gewohnt nach **Unterschrieben**.
+
 ---
 
 ## 4. Mit OneDrive arbeiten
