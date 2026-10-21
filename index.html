@@ -405,6 +405,7 @@ body.shelf-on .shelf {
 .chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .tbl .ctr { text-align: center; }
 .scaninfo { margin: 0; font-size: 13px; color: var(--muted); }
+.stat .s.disc { color: var(--warn, #9a6200); }
 ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .toolbar .grow { flex: 1; }
@@ -644,7 +645,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 27</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 28</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -3229,8 +3230,37 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     var mode = provMode(m);
     var prov = mode === 'none' ? 0 : mode === 'manual' && m.provOverride !== null && m.provOverride !== undefined ? m.provOverride : auto;
     var payout = mode === 'none' ? 0 : m.factor !== null && m.factor !== undefined ? round2(prov * m.factor) : null;
-    return { lines: lines, auto: auto, prov: prov, payout: payout, m: m, mode: mode, ki: info, existing: existing,
+    var res = { lines: lines, auto: auto, prov: prov, payout: payout, m: m, mode: mode, ki: info, existing: existing,
              noAddon: existing && !lines.some(function (l) { return l.addon && l.prov > 0; }) };
+    // what the commission would have been without discounts (list price = quantity × unit price, no negative discount lines)
+    res.listProv = prov; res.listPayout = payout; res.discLoss = 0; res.discount = 0;
+    if (!c._noList && mode === 'auto') {
+      var lp = listParsed(c.parsed);
+      if (lp !== c.parsed) {
+        var k2 = calc(Object.assign({}, c, { parsed: lp, _noList: true }));
+        res.listProv = k2.auto; res.discLoss = round2(k2.auto - auto);
+        res.listPayout = m.factor !== null && m.factor !== undefined ? round2(k2.auto * m.factor) : null;
+        res.discount = lp._discount;
+      }
+    }
+    return res;
+  }
+  var listCache = new WeakMap();
+  function listParsed(p) {
+    if (!p || !p.items) return p;
+    if (listCache.has(p)) return listCache.get(p);
+    var changed = false, disc = 0;
+    var items = p.items.map(function (it) {
+      if (it.total < 0) { changed = true; if (it.section === 'monthly') disc += -it.total; return Object.assign({}, it, { total: 0 }); }
+      if (it.unit > 0 && it.qty > 0 && it.total > 0) {
+        var list = round2(it.unit * it.qty);
+        if (list - it.total > 0.01) { changed = true; if (it.section === 'monthly') disc += list - it.total; return Object.assign({}, it, { total: list, listed: true }); }
+      }
+      return it;
+    });
+    var out = changed ? Object.assign({}, p, { items: items, _discount: round2(disc) }) : p;
+    listCache.set(p, out);
+    return out;
   }
   function needsCheck(c) {
     var p = c.parsed;
@@ -3548,9 +3578,13 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
       '<label class="sr" for="yearSel">Jahr</label><select id="yearSel" class="sel">' + years.map(function (y) { return '<option value="' + y + '"' + (y === B.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') +
         (years.length > 1 ? '<option value="0"' + (all ? ' selected' : '') + '>Alle Jahre</option>' : '') + '</select>' +
       '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="yearview">Jahresübersicht</button><button type="button" class="btn" data-act="modview">Module</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">CSV</button></div></div>';
+    var nd = !!B.noDisc, PV = function (x) { return nd ? x.k.listProv : x.k.prov; }, PO = function (x) { return nd ? x.k.listPayout : x.k.payout; };
+    var loss = sum(inYear, function (x) { return x.k.discLoss; }), withDisc = inYear.filter(function (x) { return x.k.discLoss > 0.004; }).length;
     h += '<div class="tiles">' +
-      tile('Provision', eur(sum(inYear, function (x) { return x.k.prov; })), inYear.length + (inYear.length === 1 ? ' Vertrag' : ' Verträge')) +
-      tile('Auszahlung (Faktor bekannt)', eur(sum(withF, function (x) { return x.k.payout; })), withF.length + ' mit Faktor') +
+      tile(nd ? 'Provision ohne Rabatt' : 'Provision', eur(sum(inYear, PV)), inYear.length + (inYear.length === 1 ? ' Vertrag' : ' Verträge')) +
+      tile(nd ? 'Auszahlung ohne Rabatt' : 'Auszahlung (Faktor bekannt)', eur(sum(withF, PO)), withF.length + ' mit Faktor') +
+      tile(nd ? 'Mit Rabatt wären es' : 'Ohne Rabatt wären es', eur(sum(inYear, nd ? function (x) { return x.k.prov; } : function (x) { return x.k.listProv; })),
+        withDisc ? withDisc + (withDisc === 1 ? ' Vertrag' : ' Verträge') + ' mit Rabatt · ' + eur(loss) + ' weniger Provision' : 'keine Rabatte', withDisc ? 'wait' : '') +
       tile('Faktor offen', noF.length + (noF.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(noF, function (x) { return x.k.prov; })) + ' Provision', noF.length ? 'wait' : '') +
       tile('Noch nicht abgerechnet', notBilled.length + (notBilled.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(notBilled, function (x) { return x.k.payout !== null ? x.k.payout : x.k.prov; })) + ' offen') +
       tile('Eingegangen', eur(round2(pays.reduce(function (a, pp) { return a + (pp.amount || 0); }, 0))), pays.length + (pays.length === 1 ? ' Zahlung' : ' Zahlungen')) +
@@ -3568,6 +3602,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
       [['all', 'Alle'], ['open', 'Nicht abgerechnet'], ['billed', 'Abgerechnet']].map(function (o) {
         return '<button type="button" data-act="filter" data-v="' + o[0] + '" aria-pressed="' + (f === o[0]) + '">' + o[1] + '</button>';
       }).join('') + '</div>' +
+      '<div class="seg" role="group" aria-label="Preise"><button type="button" data-act="nodisc" data-v="0" aria-pressed="' + (!nd) + '">Mit Rabatt</button><button type="button" data-act="nodisc" data-v="1" aria-pressed="' + nd + '">Ohne Rabatt</button></div>' +
       '<label class="sr" for="sortSel">Sortierung</label><select id="sortSel" class="sel">' +
       [['new', 'Neueste zuerst'], ['old', 'Älteste zuerst'], ['cust', 'Kunde A–Z'], ['prov', 'Provision absteigend']].map(function (o) {
         return '<option value="' + o[0] + '"' + (srt === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
@@ -3596,7 +3631,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         g.rows.push(x);
       });
       groups.forEach(function (g) {
-        var p = sum(g.rows, function (x) { return x.k.prov; }), a = sum(g.rows, function (x) { return x.k.payout; });
+        var p = sum(g.rows, PV), a = sum(g.rows, PO);
         var open = g.rows.filter(function (x) { return x.k.payout === null; }).length;
         h += '<tr class="month"><td colspan="' + (B.bulk ? 4 : 3) + '">' + esc(g.label) + '</td><td class="num">' + eur(p) + '</td><td></td><td class="num">' + eur(a) + (open ? ' <span class="muted">+ ' + open + ' offen</span>' : '') + '</td><td colspan="2"></td></tr>';
         g.rows.forEach(function (x) { h += contractRow(x.c, x.k); });
@@ -3798,9 +3833,9 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     return '<tr>' + (B.bulk ? '<td class="selc"><input type="checkbox" data-sel="' + esc(c.key) + '"' + (B.sel.has(c.key) ? ' checked' : '') + ' aria-label="auswählen"></td>' : '') + '<td>' + fmtDate(c.signed) + '</td>' +
       '<td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(c.custKey) + '">' + esc(c.custLabel || c.custName) + '</button>' + (c.custNo ? '<br><span class="muted small">KD ' + esc(c.custNo) + '</span>' : '') + '</td>' +
       '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> ' + statusPills(c, k) + '</td>' +
-      '<td class="num">' + eur(k.prov) + '</td>' +
+      '<td class="num">' + eur(B.noDisc ? k.listProv : k.prov) + (k.discLoss > 0.004 ? '<br><span class="muted small">' + (B.noDisc ? 'mit Rabatt ' + eur(k.prov) : 'ohne Rabatt ' + eur(k.listProv)) + '</span>' : '') + '</td>' +
       '<td class="num">' + factorInput(c, k.m) + '</td>' +
-      '<td class="num">' + eur(k.payout) + '</td>' +
+      '<td class="num">' + eur(B.noDisc ? k.listPayout : k.payout) + '</td>' +
       '<td>' + check(c, k.m, 'installed', 'Installiert') + '</td>' +
       '<td>' + check(c, k.m, 'billed', 'Abgerechnet') + '</td></tr>';
   }
@@ -3839,7 +3874,8 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         (k.mode === 'manual' ? '<label class="sr" for="po-' + esc(c.key) + '">Provision manuell</label><input id="po-' + esc(c.key) + '" class="factor wide" type="text" inputmode="decimal" data-key="' + esc(c.key) + '" data-f="provOverride" value="' + esc(k.m.provOverride === null || k.m.provOverride === undefined ? '' : deNum(k.m.provOverride.toFixed(2))) + '" placeholder="' + esc(deNum(k.auto.toFixed(2))) + '">' : '') +
         (k.mode === 'auto' ? '<label class="chk existing"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="existing"' + (k.existing ? ' checked' : '') + '> Bestandskunde</label>' : '') +
         '<span class="s">' + (k.mode === 'none' ? 'Für diesen Vertrag gibt es keine Provision' : k.mode === 'manual' ? 'Nach Regeln wären es ' + eur(k.auto)
-          : k.existing ? 'Nur Zusatzprodukte zählen: ' + esc(addonNames()) : 'Nach Regeln berechnet') + '</span></div>' +
+          : k.existing ? 'Nur Zusatzprodukte zählen: ' + esc(addonNames()) : 'Nach Regeln berechnet') + '</span>' +
+        (k.discLoss > 0.004 ? '<span class="s disc">Ohne Rabatt wären es ' + eur(k.listProv) + ' (' + eur(k.discLoss) + ' mehr)' + (k.discount ? '. Rabatt im Angebot: ' + eur(k.discount) + ' pro Monat' : '') + '.</span>' : '') + '</div>' +
       '<div class="stat"><label class="k" for="f-' + esc(c.key) + '">Faktor</label>' + factorInput(c, k.m).replace('<input ', '<input id="f-' + esc(c.key) + '" ') + '<span class="s">meist 0,6 bis 1,2</span></div>' +
       '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span></div>' +
       '<div class="stat"><span class="k">Status</span>' +
@@ -4212,6 +4248,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     if (act === 'rules') openBiz({ kind: 'rules' });
     else if (act === 'yearview') openBiz({ kind: 'year' });
     else if (act === 'filesview') openBiz({ kind: 'files' });
+    else if (act === 'nodisc') { B.noDisc = b.dataset.v === '1'; renderBiz(); }
     else if (act === 'rescan') { refreshShelf(); }
     else if (act === 'modview') { modState(); openBiz({ kind: 'modules' }); }
     else if (act === 'modmonth') { var ms = modState(); ms.y = Number(b.dataset.y); ms.m = Number(b.dataset.m); openBiz({ kind: 'modules' }); }
