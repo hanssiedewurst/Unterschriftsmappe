@@ -645,7 +645,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 28</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 29</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -3582,7 +3582,8 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     var loss = sum(inYear, function (x) { return x.k.discLoss; }), withDisc = inYear.filter(function (x) { return x.k.discLoss > 0.004; }).length;
     h += '<div class="tiles">' +
       tile(nd ? 'Provision ohne Rabatt' : 'Provision', eur(sum(inYear, PV)), inYear.length + (inYear.length === 1 ? ' Vertrag' : ' Verträge')) +
-      tile(nd ? 'Auszahlung ohne Rabatt' : 'Auszahlung (Faktor bekannt)', eur(sum(withF, PO)), withF.length + ' mit Faktor') +
+      tile(nd ? 'Auszahlung ohne Rabatt' : 'Auszahlung (Faktor bekannt)', eur(sum(withF, PO)), withF.length + ' mit Faktor' +
+        (withF.some(function (x) { return x.k.discLoss > 0.004; }) ? ' · ' + (nd ? 'mit Rabatt ' + eur(sum(withF, function (x) { return x.k.payout; })) : 'ohne Rabatt ' + eur(sum(withF, function (x) { return x.k.listPayout; }))) : '')) +
       tile(nd ? 'Mit Rabatt wären es' : 'Ohne Rabatt wären es', eur(sum(inYear, nd ? function (x) { return x.k.prov; } : function (x) { return x.k.listProv; })),
         withDisc ? withDisc + (withDisc === 1 ? ' Vertrag' : ' Verträge') + ' mit Rabatt · ' + eur(loss) + ' weniger Provision' : 'keine Rabatte', withDisc ? 'wait' : '') +
       tile('Faktor offen', noF.length + (noF.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(noF, function (x) { return x.k.prov; })) + ' Provision', noF.length ? 'wait' : '') +
@@ -3835,7 +3836,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
       '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> ' + statusPills(c, k) + '</td>' +
       '<td class="num">' + eur(B.noDisc ? k.listProv : k.prov) + (k.discLoss > 0.004 ? '<br><span class="muted small">' + (B.noDisc ? 'mit Rabatt ' + eur(k.prov) : 'ohne Rabatt ' + eur(k.listProv)) + '</span>' : '') + '</td>' +
       '<td class="num">' + factorInput(c, k.m) + '</td>' +
-      '<td class="num">' + eur(B.noDisc ? k.listPayout : k.payout) + '</td>' +
+      '<td class="num">' + eur(B.noDisc ? k.listPayout : k.payout) + (k.discLoss > 0.004 && k.payout !== null ? '<br><span class="muted small">' + (B.noDisc ? 'mit Rabatt ' + eur(k.payout) : 'ohne Rabatt ' + eur(k.listPayout)) + '</span>' : '') + '</td>' +
       '<td>' + check(c, k.m, 'installed', 'Installiert') + '</td>' +
       '<td>' + check(c, k.m, 'billed', 'Abgerechnet') + '</td></tr>';
   }
@@ -3877,7 +3878,8 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
           : k.existing ? 'Nur Zusatzprodukte zählen: ' + esc(addonNames()) : 'Nach Regeln berechnet') + '</span>' +
         (k.discLoss > 0.004 ? '<span class="s disc">Ohne Rabatt wären es ' + eur(k.listProv) + ' (' + eur(k.discLoss) + ' mehr)' + (k.discount ? '. Rabatt im Angebot: ' + eur(k.discount) + ' pro Monat' : '') + '.</span>' : '') + '</div>' +
       '<div class="stat"><label class="k" for="f-' + esc(c.key) + '">Faktor</label>' + factorInput(c, k.m).replace('<input ', '<input id="f-' + esc(c.key) + '" ') + '<span class="s">meist 0,6 bis 1,2</span></div>' +
-      '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span></div>' +
+      '<div class="stat"><span class="k">Auszahlung</span><span class="v">' + eur(k.payout) + '</span><span class="s">' + (k.payout === null ? 'Faktor fehlt noch' : 'Provision × Faktor') + '</span>' +
+        (k.discLoss > 0.004 && k.listPayout !== null ? '<span class="s disc">Ohne Rabatt wären es ' + eur(k.listPayout) + ' (' + eur(round2(k.listPayout - k.payout)) + ' mehr).</span>' : '') + '</div>' +
       '<div class="stat"><span class="k">Status</span>' +
         '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="installed"' + (k.m.installed ? ' checked' : '') + '> Installiert</label>' +
         (k.m.installed ? '<label class="sr" for="ia-' + esc(c.key) + '">Installiert am</label><input id="ia-' + esc(c.key) + '" class="txt date-in" type="date" data-key="' + esc(c.key) + '" data-f="installedAt" value="' + esc(k.m.installedAt ? isoOf(k.m.installedAt) : '') + '">' +
