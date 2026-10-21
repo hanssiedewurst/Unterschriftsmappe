@@ -404,6 +404,8 @@ body.shelf-on .shelf {
 .row-btns { display: flex; gap: 6px; }
 .chk { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
 .tbl .ctr { text-align: center; }
+.scaninfo { margin: 0; font-size: 13px; color: var(--muted); }
+ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .toolbar .grow { flex: 1; }
 .bulkbar { display: flex; flex-direction: column; gap: 10px; border-color: var(--accent); }
@@ -642,7 +644,7 @@ body.shelf-on .shelf {
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 25</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 26</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -3231,16 +3233,27 @@ body.shelf-on .shelf {
   }
 
   /* reading the signed contracts */
-  async function walkSigned(dir, path, depth, out) {
-    for await (var pair of dir.entries()) {
-      var name = pair[0], h = pair[1];
-      if (h.kind === 'file' && /\.pdf$/i.test(name)) {
-        var file = await h.getFile();
-        out.push({ name: name, path: path, handle: h, size: file.size, mtime: file.lastModified, file: file });
-      } else if (h.kind === 'directory' && depth < 2) {
-        await walkSigned(h, path ? path + ' › ' + name : name, depth + 1, out);
+  // one unreadable file (e.g. a OneDrive file that is not downloaded yet) must not stop the whole scan
+  async function walkSigned(dir, path, depth, out, failed) {
+    try {
+      for await (var pair of dir.entries()) {
+        var name = pair[0], h = pair[1];
+        if (h.kind === 'file' && /\.pdf\s*$/i.test(name)) {
+          try {
+            var file = await h.getFile();
+            out.push({ name: name, path: path, handle: h, size: file.size, mtime: file.lastModified, file: file });
+          } catch (e) { failed.push({ name: name, path: path, reason: fileErr(e) }); }
+        } else if (h.kind === 'directory' && depth < 6) {
+          await walkSigned(h, path ? path + ' › ' + name : name, depth + 1, out, failed);
+        }
       }
-    }
+    } catch (e) { failed.push({ name: '(Ordner)', path: path || dir.name, reason: fileErr(e) }); }
+  }
+  function fileErr(e) {
+    var n = e && e.name;
+    if (n === 'NotReadableError' || n === 'NotFoundError') return 'nicht lesbar – vermutlich nur in der Cloud. In OneDrive „Immer auf diesem Gerät behalten“ wählen oder Datei einmal öffnen.';
+    if (n === 'NotAllowedError' || n === 'SecurityError') return 'kein Zugriff';
+    return (e && e.message) || String(e);
   }
   async function getParsed(f) {
     var ck = 'parse:' + PARSER_VERSION + ':' + f.path + '/' + f.name + '|' + f.size + '|' + f.mtime;
@@ -3273,6 +3286,11 @@ body.shelf-on .shelf {
       det: { no: custNo, source: cust.no ? 'pdf' : noFromOffer ? 'offer' : '', key: custNo ? 'K:' + custNo : 'N:' + (cust.name || f.name).toLowerCase() }
     };
   }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible' || F.state !== 'ready' || B.scanning) return;
+    if (B.scanStats && Date.now() - B.scanStats.at < 60000) return;
+    refreshShelf();
+  });
   async function scanContracts() {
     if (F.state !== 'ready') return;
     if (B.scanning) { B.rescan = true; return; }
@@ -3280,8 +3298,8 @@ body.shelf-on .shelf {
     renderCustomers(); if (S.view === 'biz') renderBiz();
     try {
       if (!B.data) await loadData();
-      var files = [];
-      await walkSigned(F.outDir, '', 0, files);
+      var files = [], failed = [];
+      await walkSigned(F.outDir, '', 0, files, failed);
       var list = [];
       for (var i = 0; i < files.length; i++) {
         B.progress = (i + 1) + ' von ' + files.length;
@@ -3291,8 +3309,12 @@ body.shelf-on .shelf {
       await resolveLinks(list);
       list.sort(function (a, b) { return (b.signed - a.signed) || (b.file.mtime - a.file.mtime); });
       var byKey = new Map();
-      list.forEach(function (c) { if (!byKey.has(c.key)) byKey.set(c.key, c); else byKey.get(c.key).older++; });
+      list.forEach(function (c) {
+        if (!byKey.has(c.key)) { c.olderFiles = []; byKey.set(c.key, c); }
+        else { var k0 = byKey.get(c.key); k0.older++; k0.olderFiles.push(c.file); }
+      });
       B.contracts = Array.from(byKey.values());
+      B.scanStats = { files: files.length, failed: failed, merged: B.contracts.filter(function (c) { return c.older; }).reduce(function (a, c) { return a + c.older; }, 0), at: Date.now() };
       applyManualNumbers();
       customers(); // merges names per customer number
       B.scanned = true;
@@ -3465,6 +3487,7 @@ body.shelf-on .shelf {
     else if (B.view.kind === 'payment') html = viewPayment();
     else if (B.view.kind === 'year') html = viewYear();
     else if (B.view.kind === 'modules') html = viewModules();
+    else if (B.view.kind === 'files') html = viewFiles();
     else html = viewOverview();
     bizEl.innerHTML = html;
     renderLinkList();
@@ -3519,6 +3542,15 @@ body.shelf-on .shelf {
       tile('Noch nicht abgerechnet', notBilled.length + (notBilled.length === 1 ? ' Vertrag' : ' Verträge'), eur(sum(notBilled, function (x) { return x.k.payout !== null ? x.k.payout : x.k.prov; })) + ' offen') +
       tile('Eingegangen', eur(round2(pays.reduce(function (a, pp) { return a + (pp.amount || 0); }, 0))), pays.length + (pays.length === 1 ? ' Zahlung' : ' Zahlungen')) +
       '</div>';
+    var st = B.scanStats;
+    if (st) {
+      var otherYears = all ? 0 : B.contracts.length - inYear.length;
+      h += '<p class="scaninfo">' + st.files + ' PDF' + (st.files === 1 ? '' : 's') + ' im Ordner „' + esc(F.outDir ? F.outDir.name : 'Unterschrieben') + '“ · ' + B.contracts.length + (B.contracts.length === 1 ? ' Vertrag' : ' Verträge') +
+        (otherYears ? ' · davon ' + otherYears + ' in anderen Jahren' : '') +
+        (st.merged ? ' · ' + st.merged + (st.merged === 1 ? ' ältere Fassung' : ' ältere Fassungen') + ' zusammengefasst' : '') +
+        (st.failed.length ? ' · <span class="pill warn">' + st.failed.length + ' nicht lesbar</span>' : '') +
+        ' <button type="button" class="linkish" data-act="filesview">Alle Dateien anzeigen</button></p>';
+    }
     h += '<div class="toolbar"><div class="seg" role="group" aria-label="Filter">' +
       [['all', 'Alle'], ['open', 'Nicht abgerechnet'], ['billed', 'Abgerechnet']].map(function (o) {
         return '<button type="button" data-act="filter" data-v="' + o[0] + '" aria-pressed="' + (f === o[0]) + '">' + o[1] + '</button>';
@@ -3614,6 +3646,35 @@ body.shelf-on .shelf {
     h += '<p class="sub">„Erwartet“ braucht das Installationsdatum. Es wird gesetzt, wenn du „Installiert“ abhakst, und lässt sich im Vertrag ändern. „Differenz“ erscheint, sobald für den Monat alle Faktoren eingetragen sind.</p>';
     return h;
   }
+  /* every PDF in the signed folder and what became of it */
+  function viewFiles() {
+    var st = B.scanStats || { files: 0, failed: [], merged: 0 };
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Dateien im Ordner' }]);
+    h += '<div class="biz-top"><div><h1>Dateien im Ordner „' + esc(F.outDir ? F.outDir.name : 'Unterschrieben') + '“</h1><p class="sub">Alle PDFs, die die App gefunden hat, auch in Unterordnern. Gelesen ' + (st.at ? 'um ' + new Date(st.at).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '–') + '.</p></div>' +
+      '<div class="biz-actions"><button type="button" class="btn" data-act="rescan">Neu einlesen</button></div></div>';
+    var rows = [];
+    B.contracts.forEach(function (c) {
+      rows.push({ f: c.file, c: c, state: 'ok' });
+      (c.olderFiles || []).forEach(function (f) { rows.push({ f: f, c: c, state: 'merged' }); });
+    });
+    rows.sort(function (a, b) { return ((a.f.path || '') + '/' + a.f.name).localeCompare((b.f.path || '') + '/' + b.f.name, 'de'); });
+    if (st.failed.length) {
+      h += '<div class="panel pad-in warnbox"><p><strong>' + st.failed.length + (st.failed.length === 1 ? ' Datei konnte' : ' Dateien konnten') + ' nicht gelesen werden:</strong></p><ul class="plain">' +
+        st.failed.map(function (x) { return '<li>' + esc((x.path ? x.path + ' › ' : '') + x.name) + ' – ' + esc(x.reason) + '</li>'; }).join('') + '</ul></div>';
+    }
+    h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Datei</th><th>Unterschrieben</th><th>Erkannt als</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      var c = r.c, label = c.offerNo ? 'Angebot ' + c.offerNo : (c.parsed.noText ? 'Scan' : 'nicht erkannt');
+      h += '<tr' + (r.state === 'merged' ? ' class="dim"' : '') + '><td class="wrap brk">' + esc((r.f.path ? r.f.path + ' › ' : '') + r.f.name) + '</td>' +
+        '<td>' + fmtDate(r.state === 'ok' ? c.signed : (/_unterschrieben_(\d{4})-(\d{2})-(\d{2})/.test(r.f.name) ? (function (m) { return new Date(+m[1], +m[2] - 1, +m[3]).getTime(); })(/_unterschrieben_(\d{4})-(\d{2})-(\d{2})/.exec(r.f.name)) : r.f.mtime)) + '</td>' +
+        '<td class="wrap"><button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(label) + '</button> <span class="muted">' + esc(c.custLabel || c.custName || '') + '</span></td>' +
+        '<td>' + (r.state === 'ok' ? '<span class="pill okp">Vertrag</span>' + (c.parsed.error ? ' <span class="pill warn">Fehler beim Lesen</span>' : '') : '<span class="pill">ältere Fassung, zusammengefasst</span>') + '</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    h += '<p class="sub">Mehrere PDFs mit derselben Angebotsnummer zählt die App als einen Vertrag, die neueste Datei gilt. Fehlt eine Datei ganz, liegt sie meist außerhalb dieses Ordners oder ist in OneDrive noch nicht auf diesen Rechner synchronisiert.</p>';
+    return h;
+  }
+
   /* modules sold per month (by signing date) */
   var SEC_TAB = [['monthly', 'Module (monatlich)'], ['onetime', 'Einmalig'], ['service', 'Dienstleistungen']];
   function modState() {
@@ -4134,6 +4195,8 @@ body.shelf-on .shelf {
     }
     if (act === 'rules') openBiz({ kind: 'rules' });
     else if (act === 'yearview') openBiz({ kind: 'year' });
+    else if (act === 'filesview') openBiz({ kind: 'files' });
+    else if (act === 'rescan') { refreshShelf(); }
     else if (act === 'modview') { modState(); openBiz({ kind: 'modules' }); }
     else if (act === 'modmonth') { var ms = modState(); ms.y = Number(b.dataset.y); ms.m = Number(b.dataset.m); openBiz({ kind: 'modules' }); }
     else if (act === 'modsec') { modState().sec = b.dataset.v; renderBiz(); }

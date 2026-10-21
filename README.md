@@ -158,6 +158,8 @@ Die Kachel **Noch nicht installiert** zeigt, was über alle Jahre noch in der Pi
 
 **Eingescannte Verträge:** Ein Scan enthält keinen Text, die App kann daraus also weder Kunde noch Preise lesen. Solche Verträge stehen in der Übersicht mit „Scan“. In der Vertragsansicht auf **Original-Angebot verknüpfen** klicken und das digitale Angebot aus dem Angebote-Ordner wählen. Kunde, Kundennummer, Positionen und Provision kommen dann exakt aus dem Original, das unterschriebene Dokument bleibt der Scan. Das Original gilt danach in der Angebotsliste als unterschrieben. Die Verknüpfung lässt sich jederzeit wieder lösen.
 
+**Fehlen Verträge?** Unter den Kacheln steht, wie viele PDFs die App im Ordner gefunden hat, wie viele davon Verträge sind und wie viele in anderen Jahren liegen. **Alle Dateien anzeigen** listet jede Datei mit Status. Mehrere PDFs mit derselben Angebotsnummer zählen als ein Vertrag (die neueste gilt), Unterordner werden bis zu sechs Ebenen tief gelesen. Ist eine Datei „nicht lesbar“, liegt sie meist nur in der Cloud: in OneDrive per Rechtsklick „Immer auf diesem Gerät behalten“ wählen, dann **Neu einlesen**. Wechselt man zurück zur App, liest sie den Ordner automatisch neu ein.
+
 **Wo die Daten liegen:** Faktoren, Häkchen, Notizen, Zahlungen und Regeln speichert die App in der Datei `_Unterschriftenmappe-Daten.json` im Ablageordner. OneDrive sichert und synchronisiert sie mit. Bitte nicht löschen, sonst sind die eingetragenen Faktoren weg.
 
 ---
