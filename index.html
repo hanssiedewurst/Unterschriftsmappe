@@ -644,7 +644,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 26</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 27</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2456,18 +2456,31 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     var items = (parsed.items || []).filter(function (x) { return x.section === sec; });
     return items.length ? Math.round(items.reduce(function (a, x) { return a + (x.total || 0); }, 0) * 100) / 100 : null;
   }
+  // monthly positions that do not count towards the MRR (user licences can change every month)
+  function mrrExclude() {
+    var v = B && B.data && B.data.settings && B.data.settings.mrrExclude;
+    return (v === undefined || v === null ? 'aktive Mitarbeiter' : String(v)).split(';').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+  }
+  function isFlexItem(name) { var n = String(name || '').toLowerCase(); return mrrExclude().some(function (x) { return n.indexOf(x) >= 0; }); }
+  function mrrOf(parsed) {
+    var monthly = sumSec(parsed, 'monthly');
+    if (monthly === null) return { mrr: null, flex: 0 };
+    var flex = (parsed.items || []).filter(function (x) { return x.section === 'monthly' && isFlexItem(x.name); }).reduce(function (a, x) { return a + (x.total || 0); }, 0);
+    flex = Math.round(flex * 100) / 100;
+    return { mrr: Math.round((monthly - flex) * 100) / 100, flex: flex, monthly: monthly };
+  }
   function sfSummary(parsed, signedAt) {
     var cust = parsed.customer || {}, po = /^(\d{4,})[_\-\/]/.exec(parsed.offerNo || '');
     var mods = (parsed.items || []).filter(function (x) { return x.section === 'monthly'; })
       .map(function (x) { return (x.qty && x.qty !== 1 ? String(x.qty).replace('.', ',') + ' × ' : '') + x.name; });
-    var d = signedAt ? new Date(signedAt) : new Date();
+    var d = signedAt ? new Date(signedAt) : new Date(), mr = mrrOf(parsed);
     var rows = [
       ['Kunde', cust.name || ''], ['Kundennummer', cust.no || (po ? po[1] : '')], ['Angebot', parsed.offerNo || ''],
       ['Unterschrieben am', String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + d.getFullYear()],
-      ['MRR (monatlich)', eurDe(sumSec(parsed, 'monthly'))], ['Einmalig', eurDe(sumSec(parsed, 'onetime'))],
+      ['MRR (monatlich)', eurDe(mr.mrr)], ['Nutzerlizenzen (flexibel, nicht im MRR)', mr.flex ? eurDe(mr.flex) : ''], ['Einmalig', eurDe(sumSec(parsed, 'onetime'))],
       ['Dienstleistungen', eurDe(sumSec(parsed, 'service'))], ['Laufzeit', parsed.term || ''], ['Module', mods.join('; ')]
     ].filter(function (r) { return r[1] && r[1] !== '–'; });
-    return { rows: rows, mrr: sumSec(parsed, 'monthly'), text: rows.map(function (r) { return r[0] + ': ' + r[1]; }).join('\n') };
+    return { rows: rows, mrr: mr.mrr, flex: mr.flex, text: rows.map(function (r) { return r[0] + ': ' + r[1]; }).join('\n') };
   }
   async function summarizeBytes(bytes) {
     var opts = { data: new Uint8Array(bytes), isEvalSupported: false };
@@ -3945,6 +3958,9 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     h += '<h2 class="h2">Ablauf bis zur Auszahlung</h2><div class="panel pad-in"><label class="fld lagfld"><span>Provision kommt so viele Monate nach dem Installationsmonat</span>' +
       '<input type="text" inputmode="numeric" class="txt num-in" data-key="setting" data-f="payLag" value="' + payLag() + '"></label>' +
       '<p class="sub" style="margin:8px 0 0">Beispiel mit ' + payLag() + ': installiert im Oktober, ' + (payLag() === 2 ? 'erste Abo-Abrechnung im November, ' : '') + 'Provision im ' + MONTHS[(9 + payLag()) % 12] + '. Danach richtet sich „Erwartet“ in der Jahresübersicht und die Reihenfolge der Vorschläge beim Zahlungsabgleich.</p></div>';
+    h += '<h2 class="h2">MRR für Salesforce</h2><div class="panel pad-in"><label class="fld"><span>Nicht im MRR: Positionen, die das enthalten (mehrere mit ; trennen)</span>' +
+      '<input type="text" class="txt" data-key="setting" data-f="mrrExclude" value="' + esc(mrrExclude().join('; ')) + '" placeholder="z. B. aktive Mitarbeiter"></label>' +
+      '<p class="sub" style="margin:8px 0 0">Nutzerlizenzen wie „App aktive Mitarbeiter“ und „PersonalManager aktive Mitarbeiter“ sind monatlich änderbar und zählen deshalb nicht zum MRR.</p></div>';
     h += '<h2 class="h2">KI-Bundle im Paketpreis</h2><div class="panel pad-in"><p class="sub" style="margin:0 0 12px">Steht im Angebot eine Zeile wie „Paket L &amp; KI-Bundle“, rechnet die App den KI-Anteil heraus: Das Paket läuft über seine normale Regel, der KI-Anteil über die Regel „KI-Bundle“. Welche Stufe gilt, erkennt sie an der Variante im Angebot. Im Vertrag lässt sie sich auch von Hand wählen.</p>' +
       '<label class="fld" style="max-width:280px"><span>Mögliche KI-Preise (€)</span><input type="text" class="txt" data-key="kitiers" data-f="tiers" value="' + esc(ki.tiers.map(deNum).join('; ')) + '"></label></div>' +
       '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Variante im Angebot enthält</th><th>KI-Anteil</th><th></th></tr></thead><tbody>' +
@@ -4267,6 +4283,9 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     }
     var key = t.dataset && t.dataset.key, f = t.dataset && t.dataset.f;
     if (!key || !f) return;
+    if (key === 'setting' && f === 'mrrExclude') {
+      B.data.settings = B.data.settings || {}; B.data.settings.mrrExclude = t.value; saveData(); rerender(); return;
+    }
     if (key === 'setting') {
       var lg = parseInt(t.value, 10);
       if (isNaN(lg) || lg < 0 || lg > 12) { toast('Bitte eine Zahl von 0 bis 12 eingeben.'); t.value = payLag(); return; }
