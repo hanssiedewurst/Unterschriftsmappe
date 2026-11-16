@@ -645,7 +645,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 29</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 31</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2921,6 +2921,18 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     });
     return lines;
   }
+  // a customer name must look like a name, not like contract prose such as
+  // "dem Kunden gemäß des Abovertrags", and never like our own companies
+  var OWN_COMPANY = /taifun|hallo\s*petra|oneqrew/i;
+  function nameLike(s) {
+    var t = String(s || '').trim();
+    if (t.length < 2 || t.length > 90 || t.split(/\s+/).length > 9) return false;
+    if (OWN_COMPANY.test(t)) return false;
+    if (/^[a-zäöüß]/.test(t)) return false;
+    if (/^(der|die|das|dem|den|des|ein|eine|einem|einen|gemäß|laut|im|in|zum|zur|für|vertreten)\b/i.test(t)) return false;
+    if (/\bgemäß\b|vertrag|im folgenden|nachfolgend|\bkurz\b/i.test(t)) return false;
+    return true;
+  }
   var SECTION = [
     [/^leistungsbestandteile\b/i, 'monthly'],
     [/^einmalige investitionen\b/i, 'onetime'],
@@ -2938,11 +2950,14 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
       lines.forEach(function (l, i) {
         var t = l.text, m;
         if (!r.offerNo && (m = /(?:abo)?angebot(?:s-?nr\.?)?\s*:?\s+([A-Za-z0-9_][\w\-\/.]*\d[\w\-\/.]*)/i.exec(t)) && !/vom\s/i.test(t)) r.offerNo = m[1];
+        // heading like "Ihr Aboangebot-Erweiterung" with the number in the line below ("1042890_4613")
+        if (!r.offerNo && /angebot[\wäöü\-]*/i.test(t) && !/vom\s/i.test(t) && lines[i + 1] &&
+            (m = /^(\d{4,}[_\-\/]\d+)$/.exec(lines[i + 1].items[0].s))) r.offerNo = m[1];
         if (!r.customer.no && (m = /(?:kunden\s*-?\s*nr\.?|kd\.?-?\s*nr\.?)\s*:?\s*(\d{3,})/i.exec(t))) r.customer.no = m[1];
         if (!r.offerDate && (m = /\bdatum\s*:?\s*(\d{1,2}\.\d{1,2}\.\d{4})/i.exec(t))) r.offerDate = m[1];
         if (!r.offerDate2 && (m = /angebot\s+vom\s+(\d{1,2}\.\d{1,2}\.\d{4})/i.exec(t))) r.offerDate2 = m[1];
         if (!r.term && (m = /laufzeit[^\d]{0,30}?(\d+\s*monate)/i.exec(t))) r.term = m[1];
-        if (/^-?\s*und\s*-?$/i.test(t) && !r.customer.name && lines[i + 1]) {
+        if (/^-?\s*und\s*-?$/i.test(t) && !r.customer.name && lines[i + 1] && nameLike(fixEnc(lines[i + 1].text))) {
           r.customer.name = fixEnc(lines[i + 1].text);
           for (var k = i + 2; k < Math.min(lines.length, i + 8); k++) {
             var a = lines[k].text;
@@ -2992,8 +3007,22 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     if (!r.customer.name) {
       var p1 = await pageLines(await pdf.getPage(1));
       var anchor = p1.findIndex(function (l) { return /angebot|datum/i.test(l.text); });
+      if (anchor < 0) anchor = p1.length;
       for (var j = 0; j < anchor; j++) {
-        if (p1[j].y > 600 && !/gmbh\s*\|/i.test(p1[j].text)) { r.customer.name = fixEnc(p1[j].text); break; }
+        var cand = fixEnc(p1[j].text);
+        if (p1[j].y > 600 && !/gmbh\s*\|/i.test(cand) && nameLike(cand)) {
+          r.customer.name = cand;
+          if (!r.customer.address.length) {
+            // street and "PLZ Ort" directly below the name
+            for (var a2 = j + 1; a2 < Math.min(anchor, j + 5); a2++) {
+              var al = fixEnc(p1[a2].text);
+              if (/kd\.?-?\s*nr|kunden\s*-?\s*nr/i.test(al)) continue;
+              r.customer.address.push(al);
+              if (/^(?:D-)?\d{5}\s+\S/.test(al)) break;
+            }
+          }
+          break;
+        }
       }
     }
     if (!r.offerDate && r.offerDate2) r.offerDate = r.offerDate2;
@@ -3011,7 +3040,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 
   /* ---------- customers, contracts and commission (PC folder mode) ---------- */
   var DATA_FILE = '_Unterschriftenmappe-Daten.json';
-  var PARSER_VERSION = 6;
+  var PARSER_VERSION = 8;
   var DEFAULT_RULES = [
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
@@ -3349,6 +3378,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         if (i % 3 === 0) renderCustomers();
         list.push(makeContract(files[i], await getParsed(files[i])));
       }
+      migrateKeys(list);
       await resolveLinks(list);
       list.sort(function (a, b) { return (b.signed - a.signed) || (b.file.mtime - a.file.mtime); });
       var byKey = new Map();
@@ -3368,6 +3398,24 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     B.scanning = false; B.progress = '';
     if (B.rescan) { B.rescan = false; scanContracts(); return; }
     renderCustomers(); if (S.view === 'biz') renderBiz();
+  }
+  /* contracts saved under their file name (offer number not recognised back then) keep factor,
+     status, notes and payment links once their offer number is recognised */
+  function migrateKeys(list) {
+    var C = B.data.contracts, moved = 0;
+    list.slice().sort(function (a, b) { return b.file.mtime - a.file.mtime; }).forEach(function (c) {
+      if (c.key.indexOf('A:') !== 0 || C[c.key]) return;
+      var oldKey = 'F:' + c.file.path + '/' + c.file.name;
+      if (!C[oldKey]) return;
+      C[c.key] = C[oldKey]; delete C[oldKey]; moved++;
+      (B.data.payments || []).forEach(function (pp) {
+        ['contracts', 'factorsSet', 'installedSet'].forEach(function (f) {
+          if (Array.isArray(pp[f])) pp[f] = pp[f].map(function (k) { return k === oldKey ? c.key : k; });
+        });
+      });
+    });
+    if (moved) saveData();
+    return moved;
   }
   async function resolveLinks(list) {
     for (var i = 0; i < list.length; i++) {
