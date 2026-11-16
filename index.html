@@ -466,6 +466,10 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 .linkpick .shelf-list { max-height: 280px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 4px; }
 .copybox.missing { border-color: var(--flag-edge); background: var(--flag-wash); }
 .copybox .cv-in { width: 150px; font-size: 16px; font-variant-numeric: tabular-nums; }
+.copybox.edit { flex-wrap: wrap; }
+.copybox .name-in { width: 280px; max-width: 100%; font-size: 16px; }
+.name-box { margin-top: 10px; }
+.name-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
 .copybox .cv { font-size: 18px; font-weight: 600; letter-spacing: .02em; user-select: all; -webkit-user-select: all; }
 
 /* Organizer */
@@ -645,7 +649,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 32</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 33</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -3318,6 +3322,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     if (c.linkMissing) return true;
     if (c.custNoSource === 'pdf' && c.noFromOffer && c.noFromOffer !== c.custNo) return true;
     if (!c.custNo) return true;
+    if (!c.custName && !(mm && mm.custName)) return true;
     return Object.keys(p.check || {}).some(function (k) { return !p.check[k]; });
   }
 
@@ -3483,16 +3488,35 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     toast(v ? 'Kundennummer ' + v + ' gespeichert.' : 'Eingetragene Kundennummer entfernt.');
     return true;
   }
+  /* customer name typed in by hand: stored with every contract of that customer, wins over the PDF */
+  function saveCustomerName(groupKey, value) {
+    var v = String(value || '').replace(/\s+/g, ' ').trim();
+    if (v.length > 120) { toast('Der Name ist zu lang (höchstens 120 Zeichen).'); return false; }
+    var g = customers().find(function (x) { return x.key === groupKey; });
+    if (!g) return false;
+    g.contracts.forEach(function (c) {
+      var m = meta(c);
+      if (v && v !== c.custName) m.custName = v; else delete m.custName;
+    });
+    saveData();
+    B.editName = null;
+    toast(v ? 'Kundenname „' + v + '“ gespeichert.' : 'Eingetragener Name entfernt, es gilt wieder der Name aus dem PDF.');
+    return true;
+  }
   function customers() {
     var map = new Map();
     B.contracts.forEach(function (c) {
       var g = map.get(c.custKey);
-      if (!g) { g = { key: c.custKey, name: c.custName, no: c.custNo, address: c.address, contracts: [] }; map.set(c.custKey, g); }
-      if (!g.name && c.custName) g.name = c.custName;
+      if (!g) { g = { key: c.custKey, name: c.custName, detected: c.custName, manual: '', no: c.custNo, address: c.address, contracts: [] }; map.set(c.custKey, g); }
+      if (!g.name && c.custName) g.name = g.detected = c.custName;
+      var mm = B.data && B.data.contracts[c.key];
+      if (!g.manual && mm && mm.custName) g.manual = mm.custName;
       if (!g.address.length && c.address.length) g.address = c.address;
       g.contracts.push(c);
     });
     map.forEach(function (g) {
+      if (g.manual) g.name = g.manual;
+      g.hasName = !!g.name;
       if (!g.name) g.name = g.no ? 'Kunde ' + g.no : 'Kunde nicht erkannt';
       g.contracts.forEach(function (c) { c.custLabel = g.name; });
     });
@@ -4019,7 +4043,17 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     var rows = g.contracts.map(function (c) { return { c: c, k: calc(c) }; });
     var sum = function (f) { return round2(rows.reduce(function (a, x) { return a + (f(x) || 0); }, 0)); };
     var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: g.name }]);
-    h += '<div class="biz-top"><div><h1>' + esc(g.name) + '</h1>' + (g.address.length ? '<p class="sub">' + esc(g.address.join(', ')) + '</p>' : '') + '</div>' +
+    var editName = B.editName === g.key || !g.hasName;
+    var nameBox = !editName ? '' :
+      '<div class="copybox edit name-box' + (g.hasName ? '' : ' missing') + '"><label class="k" for="custNameInput">' + (g.hasName ? 'Kundenname' : 'Kein Kundenname erkannt') + '</label>' +
+      '<input id="custNameInput" class="txt name-in" type="text" autocomplete="off" value="' + esc(g.hasName ? g.name : '') + '" placeholder="z. B. Müller Haustechnik GmbH">' +
+      '<button type="button" class="btn small primary" data-act="savename" data-key="' + esc(g.key) + '">Speichern</button>' +
+      (g.hasName ? '<button type="button" class="btn small quiet" data-act="cancelname">Abbrechen</button>' : '') + '</div>';
+    h += '<div class="biz-top"><div><div class="name-row"><h1>' + esc(g.name) + '</h1>' +
+      (editName ? '' : '<button type="button" class="linkish" data-act="editname" data-key="' + esc(g.key) + '">Name ändern</button>') + '</div>' +
+      (g.manual ? '<p class="sub">Name von Hand eingetragen' + (g.detected && g.detected !== g.manual ? ' · im PDF steht „' + esc(g.detected) + '“' : '') +
+        ' · <button type="button" class="linkish" data-act="clearname" data-key="' + esc(g.key) + '">Name aus dem PDF verwenden</button></p>' : '') +
+      (g.address.length ? '<p class="sub">' + esc(g.address.join(', ')) + '</p>' : '') + nameBox + '</div>' +
       (g.no && B.editNo !== g.key
         ? '<div class="copybox"><span class="k">Kundennummer</span><span class="cv mono" id="custNoValue">' + esc(g.no) + '</span>' +
           '<button type="button" class="btn small" data-act="copy" data-text="' + esc(g.no) + '">Kopieren</button>' +
@@ -4295,6 +4329,13 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     }
     if (act === 'editno') { B.editNo = b.dataset.key; renderBiz(); var ei = $('#custNoInput'); if (ei) { ei.focus(); ei.select(); } return; }
     if (act === 'cancelno') { B.editNo = null; renderBiz(); return; }
+    if (act === 'editname') { B.editName = b.dataset.key; renderBiz(); var en = $('#custNameInput'); if (en) { en.focus(); en.select(); } return; }
+    if (act === 'cancelname') { B.editName = null; renderBiz(); return; }
+    if (act === 'savename' || act === 'clearname') {
+      var ni = $('#custNameInput');
+      if (saveCustomerName(b.dataset.key, act === 'clearname' ? '' : (ni ? ni.value : ''))) { renderBiz(); renderCustomers(); }
+      return;
+    }
     if (act === 'saveno') {
       var inp = $('#custNoInput');
       if (inp && saveCustomerNo(b.dataset.key, inp.value)) { renderBiz(); renderCustomers(); }
@@ -4454,6 +4495,8 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     if ((e.target.id === 'payAmount' || e.target.id === 'payNote') && e.key === 'Enter') { e.preventDefault(); var ps = bizEl.querySelector('[data-act="paysearch"]'); if (ps) ps.click(); }
     if (e.target.id === 'custNoInput' && e.key === 'Enter') { e.preventDefault(); var sb = bizEl.querySelector('[data-act="saveno"]'); if (sb) sb.click(); }
     if (e.target.id === 'custNoInput' && e.key === 'Escape' && B.editNo) { B.editNo = null; renderBiz(); }
+    if (e.target.id === 'custNameInput' && e.key === 'Enter') { e.preventDefault(); var nb = bizEl.querySelector('[data-act="savename"]'); if (nb) nb.click(); }
+    if (e.target.id === 'custNameInput' && e.key === 'Escape' && B.editName) { B.editName = null; renderBiz(); }
   });
   bizEl.addEventListener('input', function (e) {
     var t = e.target;
