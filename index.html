@@ -649,7 +649,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 33</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 34</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -3063,6 +3063,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
   var DATA_FILE = '_Unterschriftenmappe-Daten.json';
   var PARSER_VERSION = 9;
   var DEFAULT_RULES = [
+    { sec: 'monthly', match: 'Sonderaktion', type: 'none', value: 0 },
     { sec: 'monthly', match: 'App aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'PersonalManager aktive Mitarbeiter', type: 'none', value: 0 },
     { sec: 'monthly', match: 'App Grundgebühr', type: 'fixed', value: 295, existing: true, until: '2026-12-31' },
@@ -3149,6 +3150,12 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
           });
           B.data.rules = out;
         }
+        if (!d.rulesVersion || d.rulesVersion < 5) {
+          // special offers (e.g. HalloPetra Sonderaktion 19,95 €) earn no commission
+          if (!B.data.rules.some(function (r) { return /sonderaktion/i.test(r.match || ''); })) {
+            B.data.rules.unshift({ sec: 'monthly', match: 'Sonderaktion', type: 'none', value: 0 });
+          }
+        }
       }
     } catch (e) {
       if (e && e.name === 'NotFoundError') return;
@@ -3166,7 +3173,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         var fh = await F.outDir.getFileHandle(DATA_FILE, { create: true });
         var w = await fh.createWritable();
         await w.write(JSON.stringify({ app: 'Unterschriftenmappe', version: 1, updated: new Date().toISOString(),
-                                       rulesVersion: 4, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments, settings: B.data.settings }, null, 2));
+                                       rulesVersion: 5, kiVersion: 2, rules: B.data.rules, ki: B.data.ki, contracts: B.data.contracts, payments: B.data.payments, settings: B.data.settings }, null, 2));
         await w.close();
       } catch (e) {
         console.warn(e);
@@ -3270,7 +3277,9 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     var lines = expandItems(c, info).map(function (it) {
       var r = ruleFor(it, c.signed), l = { item: it, rule: r, prov: provOf(it, r) };
       if (existing) {
-        if (isKiItem(it)) { l.rule = kiRule(c.signed); l.prov = provOf(it, l.rule); }
+        // HalloPetra counts for existing customers too, unless a named rule says "keine Provision" (e.g. Sonderaktion)
+        var namedNone = r && r.type === 'none' && String(r.match || '').trim();
+        if (isKiItem(it) && !namedNone) { l.rule = kiRule(c.signed); l.prov = provOf(it, l.rule); }
         if (l.rule && l.rule.existing && l.rule.type !== 'none') l.addon = true;
         else { l.prov = 0; l.existing = true; }
       }
