@@ -146,6 +146,16 @@ Unten auf der Regel-Seite steht jede Position aus deinen Verträgen mit der Rege
 - **Passende Verträge suchen** sucht zusätzlich unter allen noch nicht abgerechneten Verträgen eine Kombination, deren Auszahlungen den Betrag ergeben, auch unter nicht installierten. Abweichungen bis 2 € gelten als Rundung. Fehlt ein Faktor, rechnet die App mit 0,6 bis 1,2 und zeigt, welcher Faktor sich ergäbe. **Diese Zuordnung übernehmen** hakt die Verträge als abgerechnet ab, trägt fehlende Faktoren ein und setzt vergessene „Installiert“-Häkchen.
 - Unten stehen alle Zahlungen nach Monat. **Aufheben** macht eine Zahlung samt Zuordnung rückgängig.
 
+**Provisionsabrechnungen automatisch zuordnen:** Einmal den Ordner mit den Provisions-Gutschriften wählen, beim Einrichten („Provisionsabrechnungen (optional)“) oder in der Provisionsübersicht über **Ordner wählen**. Die App braucht dafür nur Leserechte. Jede neue Gutschrift (PDF mit „Provisions-Gutschrift“, Zeilen mit Kunde, Kundennummer, Rechnung, Datum, Betrag, Provision) liest sie automatisch ein: beim Öffnen, beim Zurückwechseln zur App und bei offener App jede Minute.
+- Pro Kundennummer werden die Provisionszeilen addiert und mit den offenen Verträgen dieses Kunden abgeglichen, genau wie bei **Passende Verträge suchen**. Passende Verträge werden als abgerechnet abgehakt, fehlende Faktoren und „Installiert“ werden eingetragen.
+- Die Gutschrift erscheint als Zahlung im Abrechnungsmonat („Bis einschließlich“) und zählt in der Jahresübersicht als eingegangen.
+- Jede Gutschrift wird nur einmal gebucht, auch wenn dieselbe Nummer unter einem anderen Dateinamen noch einmal im Ordner liegt.
+- In der Kundenübersicht stehen unter **Provisionsabrechnungen** alle Zeilen des Kunden mit dem zugeordneten Vertrag.
+- Was nicht passt (Kunde ohne Vertrag in der App, Teilzahlung, laufende Provision), steht unter **Offene Provisionen → Zahlungen ohne Zuordnung**. Gehört eine solche Zahlung zu einem Vertrag, dort das Häkchen „Abgerechnet“ von Hand setzen.
+- **Neu zuordnen** in der Zahlungsliste macht die Zuordnung einer Gutschrift rückgängig und gleicht sie neu ab, z. B. nachdem ein fehlender Vertrag eingelesen wurde.
+
+**Offene Provisionen:** Knopf in der Provisionsübersicht. Zeigt alle Verträge ohne Zahlung, die ab dem Datum im Feld **Alle offenen ab** unterschrieben wurden, mit Provision, Faktor, erwarteter Auszahlung und Monat. Das Datum merkt sich die App.
+
 **Jahresübersicht:** Bildet den Ablauf *Vertrag › Installation › erste Abo-Abrechnung › Provision* ab. Pro Monat:
 - **Unterschrieben / Provision:** nach Unterschriftsdatum
 - **Erwartet:** Auszahlung im Monat, in dem die Provision kommen sollte. Standard sind 2 Monate nach dem Installationsmonat, einstellbar unter **Regeln → Ablauf bis zur Auszahlung**. Ein Vertrag aus dem November, der im Dezember installiert wird, erscheint deshalb im Februar des Folgejahres.
