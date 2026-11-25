@@ -620,9 +620,10 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     <button type="button" role="tab" data-tab="customers" aria-selected="false">Kunden</button>
   </div>
   <div class="shelf-box" id="shelfSetupBox" hidden>
-    <p>Wähle einmal die beiden Ordner aus deinem OneDrive. Die App merkt sich die Auswahl auf diesem Rechner.</p>
+    <p>Wähle einmal die Ordner aus deinem OneDrive. Die App merkt sich die Auswahl auf diesem Rechner.</p>
     <div class="pick"><span class="pick-label">Angebote zum Unterschreiben</span><span class="pick-name" id="pickInName">noch nicht gewählt</span><button class="btn" type="button" id="pickIn">Ordner wählen</button></div>
     <div class="pick"><span class="pick-label">Ablage für unterschriebene PDFs</span><span class="pick-name" id="pickOutName">noch nicht gewählt</span><button class="btn" type="button" id="pickOut">Ordner wählen</button></div>
+    <div class="pick"><span class="pick-label">Provisionsabrechnungen (optional)</span><span class="pick-name" id="pickProvName">noch nicht gewählt</span><button class="btn" type="button" id="pickProv">Ordner wählen</button></div>
     <button class="btn primary" type="button" id="pickDone" disabled>Fertig</button>
   </div>
   <div class="shelf-box" id="shelfPromptBox" hidden>
@@ -649,7 +650,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 </aside>
 <main>
   <div class="note" id="sampleNote" hidden>
-    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 34</span></p>
+    <p><strong>Beispielvertrag zum Ausprobieren.</strong> Tippe auf ein gelbes Fähnchen zum Unterschreiben oder auf ein blau umrandetes Feld zum Ausfüllen. Eigene Felder legst du mit „Hinzufügen“ an, dein eigenes PDF öffnest du mit „PDF öffnen“. <span class="mono" style="color: var(--muted)">Version 35</span></p>
   </div>
   <div class="empty" id="empty" hidden>
     <h2>Kein Dokument geöffnet</h2>
@@ -2689,7 +2690,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 
   /* ---------- OneDrive folders (Edge/Chrome on a computer) ---------- */
   var FS_OK = typeof window.showDirectoryPicker === 'function' && window.self === window.top;
-  var F = { inDir: null, outDir: null, state: 'off', entries: [], filter: 'open', q: '', current: null, loading: false };
+  var F = { inDir: null, outDir: null, provDir: null, state: 'off', entries: [], filter: 'open', q: '', current: null, loading: false };
   var shelfBtn = $('#shelfBtn');
 
   function idb() {
@@ -2715,9 +2716,9 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
       tx.oncomplete = function () { resolve(); }; tx.onerror = function () { reject(tx.error); };
     });
   }
-  async function perm(h, ask) {
+  async function perm(h, ask, mode) {
     if (!h) return false;
-    var o = { mode: 'readwrite' };
+    var o = { mode: mode || 'readwrite' };
     try {
       if ((await h.queryPermission(o)) === 'granted') return true;
       if (ask && (await h.requestPermission(o)) === 'granted') return true;
@@ -2738,7 +2739,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     shelfBtn.hidden = false;
     provBtn.hidden = false;
     setBarH();
-    try { F.inDir = await kvGet('inDir'); F.outDir = await kvGet('outDir'); } catch (e) { console.warn(e); }
+    try { F.inDir = await kvGet('inDir'); F.outDir = await kvGet('outDir'); F.provDir = (await kvGet('provDir')) || null; } catch (e) { console.warn(e); }
     if (!F.inDir || !F.outDir) { F.state = 'setup'; renderShelf(); return; }
     if ((await perm(F.inDir, false)) && (await perm(F.outDir, false))) { F.state = 'ready'; showShelf(!narrow()); await refreshShelf(); }
     else { F.state = 'prompt'; renderShelf(); showShelf(!narrow()); }
@@ -2746,9 +2747,15 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
 
   async function pick(which) {
     try {
-      var h = await window.showDirectoryPicker({ id: which === 'in' ? 'angebote' : 'unterschrieben', mode: 'readwrite', startIn: 'documents' });
-      if (which === 'in') F.inDir = h; else F.outDir = h;
+      var h = await window.showDirectoryPicker({ id: which === 'in' ? 'angebote' : which === 'prov' ? 'provisionen' : 'unterschrieben',
+                                                 mode: which === 'prov' ? 'read' : 'readwrite', startIn: 'documents' });
+      if (which === 'in') F.inDir = h; else if (which === 'prov') F.provDir = h; else F.outDir = h;
       renderShelf();
+      if (which === 'prov' && F.state === 'ready') {
+        // chosen later from the commission overview: keep it right away and read the statements
+        try { await kvSet('provDir', h); } catch (e) { console.warn(e); }
+        ST.seen.clear(); renderBiz(); checkStatements();
+      }
     } catch (e) {
       if (e && e.name !== 'AbortError') toast('Der Ordner konnte nicht gewählt werden (' + e.message + ').');
     }
@@ -2758,7 +2765,13 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     try {
       if (await F.inDir.isSameEntry(F.outDir)) { toast('Bitte zwei verschiedene Ordner wählen: einen für Angebote, einen für Unterschriebene.', { ms: 6000 }); return; }
     } catch (e) {}
-    try { await kvSet('inDir', F.inDir); await kvSet('outDir', F.outDir); } catch (e) { console.warn(e); toast('Die Ordnerwahl konnte nicht gespeichert werden und gilt nur bis zum Neustart.'); }
+    if (F.provDir) {
+      try {
+        if ((await F.provDir.isSameEntry(F.inDir)) || (await F.provDir.isSameEntry(F.outDir))) { toast('Für die Provisionsabrechnungen bitte einen eigenen Ordner wählen.', { ms: 6000 }); return; }
+      } catch (e) {}
+    }
+    try { await kvSet('inDir', F.inDir); await kvSet('outDir', F.outDir); if (F.provDir) await kvSet('provDir', F.provDir); } catch (e) { console.warn(e); toast('Die Ordnerwahl konnte nicht gespeichert werden und gilt nur bis zum Neustart.'); }
+    ST.seen.clear();
     F.state = 'ready';
     await refreshShelf();
   }
@@ -2817,6 +2830,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     $('#shelfOut').textContent = F.outDir ? F.outDir.name : '–';
     $('#pickInName').textContent = F.inDir ? F.inDir.name : 'noch nicht gewählt';
     $('#pickOutName').textContent = F.outDir ? F.outDir.name : 'noch nicht gewählt';
+    $('#pickProvName').textContent = F.provDir ? F.provDir.name : 'noch nicht gewählt';
     $('#pickDone').disabled = !(F.inDir && F.outDir);
     if (F.state !== 'ready') return;
     var ul = $('#shelfList');
@@ -2877,11 +2891,13 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
   shelfBtn.addEventListener('click', function () { showShelf(!document.body.classList.contains('shelf-on')); });
   $('#pickIn').addEventListener('click', function () { pick('in'); });
   $('#pickOut').addEventListener('click', function () { pick('out'); });
+  $('#pickProv').addEventListener('click', function () { pick('prov'); });
   $('#pickDone').addEventListener('click', finishSetup);
   $('#shelfSetup').addEventListener('click', function () { F.state = 'setup'; renderShelf(); });
   $('#shelfRefresh').addEventListener('click', refreshShelf);
   $('#grantBtn').addEventListener('click', async function () {
     var a = await perm(F.inDir, true), b = a && (await perm(F.outDir, true));
+    if (a && b && F.provDir) await perm(F.provDir, true, 'read');
     if (a && b) { F.state = 'ready'; await refreshShelf(); }
     else toast('Ohne Erlaubnis kann die App die Ordner nicht lesen. Du kannst sie unter „Ordner ändern“ neu wählen.', { ms: 6000 });
   });
@@ -3429,6 +3445,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     B.scanning = false; B.progress = '';
     if (B.rescan) { B.rescan = false; scanContracts(); return; }
     renderCustomers(); if (S.view === 'biz') renderBiz();
+    checkStatements();
   }
   /* contracts saved under their file name (offer number not recognised back then) keep factor,
      status, notes and payment links once their offer number is recognised */
@@ -3629,6 +3646,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     else if (B.view.kind === 'year') html = viewYear();
     else if (B.view.kind === 'modules') html = viewModules();
     else if (B.view.kind === 'files') html = viewFiles();
+    else if (B.view.kind === 'open') html = viewOpen();
     else html = viewOverview();
     bizEl.innerHTML = html;
     renderLinkList();
@@ -3675,7 +3693,7 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
       '<div class="biz-actions">' +
       '<label class="sr" for="yearSel">Jahr</label><select id="yearSel" class="sel">' + years.map(function (y) { return '<option value="' + y + '"' + (y === B.year ? ' selected' : '') + '>' + y + '</option>'; }).join('') +
         (years.length > 1 ? '<option value="0"' + (all ? ' selected' : '') + '>Alle Jahre</option>' : '') + '</select>' +
-      '<button type="button" class="btn primary" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="yearview">Jahresübersicht</button><button type="button" class="btn" data-act="modview">Module</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">CSV</button></div></div>';
+      '<button type="button" class="btn primary" data-act="openview">Offene Provisionen</button><button type="button" class="btn" data-act="paynew">Zahlung eintragen</button><button type="button" class="btn" data-act="yearview">Jahresübersicht</button><button type="button" class="btn" data-act="modview">Module</button><button type="button" class="btn" data-act="rules">Regeln</button><button type="button" class="btn" data-act="csv">CSV</button></div></div>';
     var nd = !!B.noDisc, PV = function (x) { return nd ? x.k.listProv : x.k.prov; }, PO = function (x) { return nd ? x.k.listPayout : x.k.payout; };
     var loss = sum(inYear, function (x) { return x.k.discLoss; }), withDisc = inYear.filter(function (x) { return x.k.discLoss > 0.004; }).length;
     h += '<div class="tiles">' +
@@ -3696,6 +3714,13 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         (st.merged ? ' · ' + st.merged + (st.merged === 1 ? ' ältere Fassung' : ' ältere Fassungen') + ' zusammengefasst' : '') +
         (st.failed.length ? ' · <span class="pill warn">' + st.failed.length + ' nicht lesbar</span>' : '') +
         ' <button type="button" class="linkish" data-act="filesview">Alle Dateien anzeigen</button></p>';
+    }
+    if (F.provDir) {
+      var stn = statements().length;
+      h += '<p class="scaninfo">Provisionsabrechnungen aus „' + esc(F.provDir.name) + '“: ' + stn + ' eingelesen' +
+        (B.provNeedsPerm ? ' · <button type="button" class="linkish" data-act="provperm">Zugriff erlauben</button>' : '') + '</p>';
+    } else if (FS_OK) {
+      h += '<p class="scaninfo">Provisionsabrechnungen automatisch zuordnen: <button type="button" class="linkish" data-act="pickprov">Ordner wählen</button></p>';
     }
     h += '<div class="toolbar"><div class="seg" role="group" aria-label="Filter">' +
       [['all', 'Alle'], ['open', 'Nicht abgerechnet'], ['billed', 'Abgerechnet']].map(function (o) {
@@ -3982,7 +4007,8 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="installed"' + (k.m.installed ? ' checked' : '') + '> Installiert</label>' +
         (k.m.installed ? '<label class="sr" for="ia-' + esc(c.key) + '">Installiert am</label><input id="ia-' + esc(c.key) + '" class="txt date-in" type="date" data-key="' + esc(c.key) + '" data-f="installedAt" value="' + esc(k.m.installedAt ? isoOf(k.m.installedAt) : '') + '">' +
           (expIdx(k.m) !== null ? '<span class="s">Provision erwartet ' + esc(idxLabel(expIdx(k.m))) + '</span>' : '') : '') +
-        '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="billed"' + (k.m.billed ? ' checked' : '') + '> Abgerechnet' + (k.m.billedAt ? ' <span class="muted">' + fmtDate(k.m.billedAt) + '</span>' : '') + '</label></div>' +
+        '<label class="chk"><input type="checkbox" data-key="' + esc(c.key) + '" data-f="billed"' + (k.m.billed ? ' checked' : '') + '> Abgerechnet' + (k.m.billedAt ? ' <span class="muted">' + fmtDate(k.m.billedAt) + '</span>' : '') + '</label>' +
+          (k.m.billed && stmtOf(k.m) ? '<span class="s">laut Provisionsabrechnung ' + esc(stmtOf(k.m).no || stmtOf(k.m).file) + '</span>' : '') + '</div>' +
       '</div></div>';
     if (p && p.ok) {
       var sfs = sfSummary(p, c.signed);
@@ -4079,7 +4105,20 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         '<td class="num">' + eur(x.k.prov) + '</td><td class="num">' + factorInput(x.c, x.k.m) + '</td><td class="num">' + eur(x.k.payout) + '</td>' +
         '<td>' + check(x.c, x.k.m, 'installed', 'Installiert') + '</td><td>' + check(x.c, x.k.m, 'billed', 'Abgerechnet') + '</td></tr>';
     });
-    return h + '</tbody></table></div></div>';
+    h += '</tbody></table></div></div>';
+    var sl = g.no ? stmtLinesFor(g.no) : [];
+    if (sl.length) {
+      var label = function (key) { var c = B.contracts.find(function (x) { return x.key === key; }); return c ? shortLabel(c) : key.replace(/^[AF]:/, ''); };
+      h += '<h2 class="h2">Provisionsabrechnungen</h2><div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Abrechnung</th><th>Rechnung</th><th class="num">Betrag</th><th class="num">Provision</th><th>Zugeordnet zu</th></tr></thead><tbody>';
+      sl.forEach(function (x) {
+        h += '<tr><td>' + esc(x.pp.stmt.no || x.pp.stmt.file) + '<br><span class="muted small">' + esc(isoToDmy(x.pp.stmt.date || x.pp.date)) + '</span></td>' +
+          '<td>' + esc(x.l.invoice) + '<br><span class="muted small">' + esc(isoToDmy(x.l.invDate)) + '</span></td><td class="num">' + eur(x.l.amount) + '</td><td class="num">' + eur(x.l.prov) + '</td>' +
+          '<td class="wrap">' + (x.l.matched ? x.l.contracts.map(function (k) { return '<button type="button" class="linkish" data-go="contract:' + esc(k) + '">' + esc(label(k)) + '</button>'; }).join(', ') +
+            (x.l.ambiguous ? ' <span class="pill wait">mehrdeutig, bitte prüfen</span>' : '') : '<span class="pill warn">nicht zugeordnet</span>') + '</td></tr>';
+      });
+      h += '</tbody><tfoot><tr><td colspan="3">Erhalten</td><td class="num">' + eur(round2(sl.reduce(function (a, x) { return a + x.l.prov; }, 0))) + '</td><td></td></tr></tfoot></table></div></div>';
+    }
+    return h;
   }
 
   function viewRules() {
@@ -4146,9 +4185,9 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
   var PAY_TOL = 2; // differences up to 2 € count as rounding
   function isoToday() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function isoToDmy(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? m[3] + '.' + m[2] + '.' + m[1] : (iso || ''); }
-  function findCombos(target, month) {
+  function findCombos(target, month, only) {
     var pm = /^(\d{4})-(\d{2})/.exec(month || ''), pIdx = pm ? Number(pm[1]) * 12 + Number(pm[2]) - 1 : null;
-    var cands = B.contracts.map(function (c) { return { c: c, k: calc(c) }; })
+    var cands = B.contracts.filter(function (c) { return !only || only(c); }).map(function (c) { return { c: c, k: calc(c) }; })
       .filter(function (x) { return x.k.mode !== 'none' && !x.k.m.billed && x.k.prov > 0; })
       .map(function (x) {
         var known = x.k.payout !== null;
@@ -4220,7 +4259,181 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
     });
     B.data.payments.splice(i, 1);
     saveData();
-    toast('Zahlung entfernt, die Verträge sind wieder offen.');
+    if (!pay.stmt) toast('Zahlung entfernt, die Verträge sind wieder offen.');
+  }
+
+  /* ---------- commission statements ("Provisions-Gutschrift" PDFs in their own folder) ---------- */
+  var ST = { busy: false, again: false, seen: new Set() };
+  function dmyToIso(s) { var m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s || ''); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; }
+  var STMT_LINE = /^(.*?)\s+(\d{5,8})\s+(\S+)\s+(\d{2}\.\d{2}\.\d{4})\s+(\d{2}\.\d{2}\.\d{4})\s+(-?[\d.]+,\d{2})\s+(-?[\d.]+,\d{2})$/;
+  async function parseStatement(pdf) {
+    var st = { no: '', until: '', date: '', total: null, lines: [], marker: false };
+    for (var n = 1; n <= Math.min(pdf.numPages, 30); n++) {
+      (await pageLines(await pdf.getPage(n))).forEach(function (l) {
+        var t = l.text, m;
+        if (/provisions-?\s*gutschrift|provisionsabrechnung/i.test(t)) st.marker = true;
+        if (!st.no && (m = /gutschrift\s*-?\s*nr\.?\s*:?\s*([A-Z]*\d+)/i.exec(t))) st.no = m[1];
+        if (!st.until && (m = /bis\s+einschlie(?:ß|ss)lich\s*:?\s*(\d{2}\.\d{2}\.\d{4})/i.exec(t))) st.until = dmyToIso(m[1]);
+        if (!st.date && (m = /\bdatum\s*:\s*(\d{2}\.\d{2}\.\d{4})/i.exec(t))) st.date = dmyToIso(m[1]);
+        if ((m = /provisionssumme\s*€?\s*(-?[\d.]+,\d{2})/i.exec(t))) st.total = parseNum(m[1]);
+        if ((m = STMT_LINE.exec(t))) {
+          st.lines.push({ name: fixEnc(m[1]).trim(), custNo: m[2], invoice: m[3], invDate: dmyToIso(m[4]), amount: parseNum(m[6]), prov: parseNum(m[7]) });
+        }
+      });
+    }
+    st.ok = st.marker && st.lines.length > 0;
+    st.sumOk = st.total === null ? null : Math.abs(round2(st.lines.reduce(function (a, l) { return a + l.prov; }, 0)) - st.total) < 0.02;
+    return st;
+  }
+  function stmtKey(f) { return (f.path || '') + '/' + f.name + '|' + f.size + '|' + f.mtime; }
+  async function readStatement(f) {
+    var ck = 'stmt:1:' + stmtKey(f);
+    try { var hit = await kvGet(ck); if (hit) return hit; } catch (e) {}
+    var st;
+    try {
+      var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(await f.file.arrayBuffer()), isEvalSupported: false }).promise;
+      try { st = await parseStatement(pdf); } finally { try { pdf.destroy(); } catch (e) {} }
+    } catch (e) { st = { ok: false, error: String((e && e.message) || e), lines: [] }; }
+    try { await kvSet(ck, st); } catch (e) {}
+    return st;
+  }
+  function statements() { return (B.data && B.data.payments || []).filter(function (pp) { return pp.stmt; }); }
+  /* books one statement as a payment: per customer number, the sum of its lines is matched against
+     that customer's open contracts (known payout, or provision × 0,6–1,2 when the factor is still open) */
+  function bookStatement(st, f) {
+    var month = (st.until || st.date || isoToday()).slice(0, 7);
+    var day = st.date || st.until || isoToday(), when = new Date(day + 'T12:00:00').getTime();
+    var pay = { id: 'S' + Date.now() + '-' + Math.floor(Math.random() * 1e6), month: month, date: day,
+                amount: st.total !== null && st.total !== undefined ? st.total : round2(st.lines.reduce(function (a, l) { return a + l.prov; }, 0)),
+                note: 'Provisionsabrechnung' + (st.no ? ' ' + st.no : ''), contracts: [], factorsSet: [], installedSet: [],
+                stmt: { no: st.no, until: st.until, date: st.date, file: f.name, path: f.path || '', key: stmtKey(f), sumOk: st.sumOk, lines: clone(st.lines) } };
+    var byCust = {};
+    pay.stmt.lines.forEach(function (l) { (byCust[l.custNo] = byCust[l.custNo] || []).push(l); });
+    Object.keys(byCust).forEach(function (no) {
+      var ls = byCust[no], target = round2(ls.reduce(function (a, l) { return a + l.prov; }, 0));
+      var res = target > PAY_TOL ? findCombos(target, month, function (c) { return c.custNo === no; }) : { results: [] };
+      var best = res.results[0];
+      ls.forEach(function (l) { l.matched = !!best; l.contracts = best ? best.items.map(function (x) { return x.c.key; }) : []; l.ambiguous = res.results.length > 1; });
+      if (!best) return;
+      best.items.forEach(function (x) {
+        var m = meta(x.c);
+        if (!x.known && best.factor !== null) { m.factor = best.factor; pay.factorsSet.push(x.c.key); }
+        if (!m.installed) { m.installed = true; m.installedAt = when; pay.installedSet.push(x.c.key); }
+        m.billed = true; m.billedAt = when; m.paymentId = pay.id;
+        pay.contracts.push(x.c.key);
+      });
+    });
+    B.data.payments.push(pay);
+    return pay;
+  }
+  async function checkStatements() {
+    if (!F.provDir || F.state !== 'ready' || !B.scanned || !B.data || !B.dataOk) return;
+    if (ST.busy) { ST.again = true; return; }
+    if (!(await perm(F.provDir, false, 'read'))) { B.provNeedsPerm = true; return; }
+    B.provNeedsPerm = false;
+    ST.busy = true;
+    var booked = [], failed = [];
+    try {
+      var files = [];
+      await walkSigned(F.provDir, '', 0, files, failed);
+      files.sort(function (a, b) { return a.mtime - b.mtime; });
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i], key = stmtKey(f);
+        if (ST.seen.has(key)) continue;
+        ST.seen.add(key);
+        if (statements().some(function (pp) { return pp.stmt.key === key; })) continue;
+        var st = await readStatement(f);
+        if (!st.ok) continue;
+        // the same statement saved twice (another file name) is booked only once
+        if (st.no && statements().some(function (pp) { return pp.stmt.no === st.no; })) continue;
+        booked.push(bookStatement(st, f));
+      }
+    } catch (e) { console.warn(e); }
+    ST.busy = false;
+    B.provFailed = failed;
+    if (booked.length) {
+      saveData();
+      var nl = 0, nm = 0;
+      booked.forEach(function (pp) { nl += pp.stmt.lines.length; nm += pp.stmt.lines.filter(function (l) { return l.matched; }).length; });
+      toast((booked.length === 1 ? 'Provisionsabrechnung ' + (booked[0].stmt.no || booked[0].stmt.file) : booked.length + ' Provisionsabrechnungen') +
+            ' eingelesen: ' + nm + ' von ' + nl + ' Positionen zugeordnet.', { ms: 7000, actionLabel: 'Offene anzeigen', action: function () { openBiz({ kind: 'open' }); } });
+      renderBiz(); renderCustomers();
+    }
+    if (ST.again) { ST.again = false; checkStatements(); }
+  }
+  function redoStatement(id) {
+    var pp = (B.data.payments || []).find(function (x) { return x.id === id; });
+    if (!pp || !pp.stmt) return;
+    undoPayment(id);
+    ST.seen.delete(pp.stmt.key);
+    toast('Abrechnung ' + (pp.stmt.no || '') + ' wird neu zugeordnet …');
+    checkStatements().then(function () { renderBiz(); renderCustomers(); });
+  }
+  // new statements are picked up while the app is open and visible
+  setInterval(function () {
+    if (document.visibilityState === 'visible' && !B.scanning) checkStatements();
+  }, 60000);
+  function stmtLinesFor(no) {
+    var out = [];
+    statements().forEach(function (pp) { pp.stmt.lines.forEach(function (l) { if (l.custNo === no) out.push({ l: l, pp: pp }); }); });
+    return out.sort(function (a, b) { return String(b.l.invDate).localeCompare(String(a.l.invDate)); });
+  }
+  function stmtOf(m) {
+    if (!m || !m.paymentId) return null;
+    var pp = (B.data.payments || []).find(function (x) { return x.id === m.paymentId; });
+    return pp && pp.stmt ? pp.stmt : null;
+  }
+
+  /* all contracts not paid yet, signed on or after a chosen date */
+  function viewOpen() {
+    var from = (B.data.settings && B.data.settings.openFrom) || (new Date().getFullYear() + '-01-01');
+    var list = B.contracts.filter(function (c) { return isoOf(c.signed) >= from; })
+      .map(function (c) { return { c: c, k: calc(c) }; })
+      .filter(function (x) { return !x.k.m.billed && x.k.mode !== 'none' && x.k.prov > 0; })
+      .sort(function (a, b) { return a.c.signed - b.c.signed; });
+    var sum = function (fn) { return round2(list.reduce(function (a, x) { return a + (fn(x) || 0); }, 0)); };
+    var withF = list.filter(function (x) { return x.k.payout !== null; });
+    var unmatched = [];
+    statements().forEach(function (pp) { pp.stmt.lines.forEach(function (l) { if (!l.matched) unmatched.push({ l: l, pp: pp }); }); });
+    var h = crumbs([{ label: 'Provision', go: 'overview' }, { label: 'Offene Provisionen' }]);
+    h += '<div class="biz-top"><div><h1>Offene Provisionen</h1><p class="sub">Verträge ohne Zahlung, unterschrieben ab dem gewählten Datum. ' +
+      (F.provDir ? 'Neue Provisionsabrechnungen im Ordner „' + esc(F.provDir.name) + '“ werden automatisch zugeordnet.' : 'Wähle den Ordner mit den Provisionsabrechnungen, dann werden Zahlungen automatisch zugeordnet.') + '</p></div>' +
+      '<div class="biz-actions"><label class="fld lagfld" for="openFrom"><span>Alle offenen ab</span><input id="openFrom" class="txt date-in" type="date" value="' + esc(from) + '"></label>' +
+      (F.provDir ? '' : '<button type="button" class="btn primary" data-act="pickprov">Abrechnungsordner wählen</button>') + '</div></div>';
+    if (B.provNeedsPerm) h += '<div class="panel pad-in warnbox"><p>Die App darf den Ordner „' + esc(F.provDir ? F.provDir.name : '') + '“ gerade nicht lesen. <button type="button" class="linkish" data-act="provperm">Zugriff erlauben</button></p></div>';
+    h += '<div class="tiles">' +
+      tile('Offene Verträge', String(list.length), 'seit ' + isoToDmy(from)) +
+      tile('Provision offen', eur(sum(function (x) { return x.k.prov; })), 'laut Regeln') +
+      tile('Auszahlung erwartet', eur(sum(function (x) { return x.k.payout; })), withF.length + ' mit Faktor' + (list.length - withF.length ? ', ' + (list.length - withF.length) + ' ohne' : ''), list.length - withF.length ? 'wait' : '') +
+      tile('Noch nicht installiert', String(list.filter(function (x) { return !x.k.m.installed; }).length), 'Provision kommt erst nach der Installation') +
+      '</div>';
+    if (!list.length) h += '<div class="panel pad-in"><p>Seit ' + esc(isoToDmy(from)) + ' ist alles abgerechnet.</p></div>';
+    else {
+      h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Unterschrieben</th><th>Kunde</th><th>Angebot</th><th class="num">Provision</th><th class="num">Faktor</th><th class="num">Auszahlung</th><th>Installiert</th><th>Erwartet</th><th>Abgerechnet</th></tr></thead><tbody>';
+      list.forEach(function (x) {
+        var e = expIdx(x.k.m);
+        h += '<tr><td>' + fmtDate(x.c.signed) + '</td>' +
+          '<td class="wrap"><button type="button" class="linkish" data-go="customer:' + esc(x.c.custKey) + '">' + esc(x.c.custLabel || x.c.custName || '') + '</button>' + (x.c.custNo ? '<br><span class="muted small">KD ' + esc(x.c.custNo) + '</span>' : '') + '</td>' +
+          '<td class="wrap brk"><button type="button" class="linkish" data-go="contract:' + esc(x.c.key) + '">' + esc(shortLabel(x.c)) + '</button></td>' +
+          '<td class="num">' + eur(x.k.prov) + '</td><td class="num">' + factorInput(x.c, x.k.m) + '</td><td class="num">' + eur(x.k.payout) + '</td>' +
+          '<td>' + check(x.c, x.k.m, 'installed', 'Installiert') + '</td><td>' + (e !== null ? esc(idxLabel(e)) : '<span class="muted">–</span>') + '</td>' +
+          '<td>' + check(x.c, x.k.m, 'billed', 'Abgerechnet') + '</td></tr>';
+      });
+      h += '</tbody><tfoot><tr><td colspan="3">Summe</td><td class="num">' + eur(sum(function (x) { return x.k.prov; })) + '</td><td></td><td class="num">' + eur(sum(function (x) { return x.k.payout; })) + '</td><td colspan="3"></td></tr></tfoot></table></div></div>';
+    }
+    if (unmatched.length) {
+      h += '<h2 class="h2">Zahlungen ohne Zuordnung</h2><p class="sub">Positionen aus Provisionsabrechnungen, zu denen kein passender offener Vertrag gefunden wurde, z. B. Kunden ohne Vertrag in der App, Teilzahlungen oder laufende Provisionen. Hake den Vertrag beim Kunden von Hand als abgerechnet ab, wenn die Zahlung dazugehört.</p>';
+      h += '<div class="panel"><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Abrechnung</th><th>Kunde</th><th>Rechnung</th><th class="num">Betrag</th><th class="num">Provision</th></tr></thead><tbody>';
+      unmatched.forEach(function (u) {
+        var g = B.contracts.find(function (c) { return c.custNo === u.l.custNo; });
+        h += '<tr><td>' + esc(u.pp.stmt.no || u.pp.stmt.file) + '<br><span class="muted small">' + esc(isoToDmy(u.pp.stmt.date || u.pp.date)) + '</span></td>' +
+          '<td class="wrap">' + (g ? '<button type="button" class="linkish" data-go="customer:' + esc(g.custKey) + '">' + esc(g.custLabel || u.l.name) + '</button>' : esc(u.l.name) + ' <span class="pill">kein Vertrag in der App</span>') +
+          '<br><span class="muted small">KD ' + esc(u.l.custNo) + '</span></td><td>' + esc(u.l.invoice) + '<br><span class="muted small">' + esc(isoToDmy(u.l.invDate)) + '</span></td>' +
+          '<td class="num">' + eur(u.l.amount) + '</td><td class="num">' + eur(u.l.prov) + '</td></tr>';
+      });
+      h += '</tbody><tfoot><tr><td colspan="4">Summe ohne Zuordnung</td><td class="num">' + eur(round2(unmatched.reduce(function (a, u) { return a + u.l.prov; }, 0))) + '</td></tr></tfoot></table></div></div>';
+    }
+    return h;
   }
   function payRow(x, factor) {
     var f = x.known ? x.k.m.factor : factor, out = x.known ? x.k.payout : round2(x.k.prov * factor);
@@ -4266,8 +4479,12 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
         var c = B.contracts.find(function (x) { return x.key === key; });
         return c ? '<button type="button" class="linkish" data-go="contract:' + esc(c.key) + '">' + esc(shortLabel(c)) + '</button> <span class="muted">' + esc(c.custLabel || c.custName || '') + '</span>' : '<span class="muted">' + esc(key.replace(/^[AF]:/, '')) + '</span>';
       });
-      h += '<tr><td>' + esc(monthLabel(payMonth(pp))) + '</td><td class="num">' + eur(pp.amount) + '</td><td class="wrap">' + (names.length ? names.join('<br>') : '<span class="pill warn">nicht zugeordnet</span>') + '</td>' +
-        '<td class="wrap">' + esc(pp.note || '') + '</td><td><button type="button" class="btn small danger" data-act="payundo" data-id="' + esc(pp.id) + '">Aufheben</button></td></tr>';
+      var st = pp.stmt, open = st ? st.lines.filter(function (l) { return !l.matched; }).length : 0;
+      h += '<tr><td>' + esc(monthLabel(payMonth(pp))) + '</td><td class="num">' + eur(pp.amount) + '</td><td class="wrap">' + (names.length ? names.join('<br>') : '<span class="pill warn">nicht zugeordnet</span>') +
+        (st && open ? '<br><span class="pill warn">' + open + ' von ' + st.lines.length + ' Positionen ohne Zuordnung</span>' : '') + '</td>' +
+        '<td class="wrap">' + esc(pp.note || '') + (st ? '<br><span class="muted small">' + esc(st.file) + (st.sumOk === false ? ' · Summe passt nicht zu den Zeilen' : '') + '</span>' : '') + '</td>' +
+        '<td>' + (st ? '<button type="button" class="btn small" data-act="stmtredo" data-id="' + esc(pp.id) + '">Neu zuordnen</button>'
+                     : '<button type="button" class="btn small danger" data-act="payundo" data-id="' + esc(pp.id) + '">Aufheben</button>') + '</td></tr>';
     });
     return h + '</tbody></table></div></div>';
   }
@@ -4312,6 +4529,20 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
       B.data.payments.push({ id: 'P' + Date.now(), month: B.pay.month || curMonth(), date: B.pay.date || isoToday(), amount: B.pay.amount, note: B.pay.note || '', contracts: [], factorsSet: [], installedSet: [] });
       saveData(); B.pay = newPay();
       toast('Zahlung ohne Zuordnung gespeichert.'); renderBiz(); return;
+    }
+    if (act === 'openview') { openBiz({ kind: 'open' }); return; }
+    if (act === 'pickprov') { pick('prov'); return; }
+    if (act === 'provperm') {
+      perm(F.provDir, true, 'read').then(function (ok) {
+        if (ok) { B.provNeedsPerm = false; ST.seen.clear(); checkStatements(); }
+        else toast('Ohne Erlaubnis kann die App die Provisionsabrechnungen nicht lesen.');
+        renderBiz();
+      });
+      return;
+    }
+    if (act === 'stmtredo') {
+      armConfirm(b, 'Wirklich neu zuordnen?', function () { redoStatement(b.dataset.id); renderBiz(); });
+      return;
     }
     if (act === 'payundo') {
       armConfirm(b, 'Wirklich aufheben?', function () { undoPayment(b.dataset.id); renderBiz(); renderCustomers(); });
@@ -4426,6 +4657,10 @@ ul.plain { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; }
   bizEl.addEventListener('change', function (e) {
     var t = e.target;
     if (t.id === 'yearSel') { B.year = Number(t.value); B.sel = new Set(); rerender(); return; }
+    if (t.id === 'openFrom') {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(t.value)) return;
+      B.data.settings = B.data.settings || {}; B.data.settings.openFrom = t.value; saveData(); rerender(); return;
+    }
     if (t.id === 'yYearSel') { B.yYear = Number(t.value); rerender(); return; }
     if (t.id === 'modYear') { modState().y = Number(t.value); rerender(); return; }
     if (t.id === 'modMonth') { modState().m = Number(t.value); rerender(); return; }
